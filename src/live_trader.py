@@ -5,7 +5,7 @@ from binance.client import Client
 from dotenv import load_dotenv
 import os
 import pandas as pd
-from datetime import datetime
+from datetime import datetime, timezone
 from src.strategy import moving_average_crossover
 from src.paper_trading import buy, sell, get_price
 
@@ -18,7 +18,7 @@ history = []
 # Simula historial de precios
 def fetch_historical_prices():
     global history
-    now = datetime.now(datetime.UTC)
+    now = datetime.now(timezone.utc)
     price = get_price()
     history.append({'timestamp': now, 'close': price})
     df = pd.DataFrame(history)
