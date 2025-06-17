@@ -3,4 +3,5 @@ __pycache__/
 logs/
 *.pyc
 data/
+.venv
 ___
