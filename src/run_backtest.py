@@ -1,16 +1,44 @@
 import pandas as pd
-from src.strategy import moving_average_crossover
+from src.strategy.rsi_sma import rsi_sma_strategy
 from src.backtest import backtest_signals
 import matplotlib.pyplot as plt
+import os
+from dotenv import load_dotenv
+load_dotenv()
 
 # Cargar datos reales
 df = pd.read_csv('data/BTCUSDT.csv', parse_dates=['timestamp'])
 df = df.sort_values('timestamp')
 
 # Calcular señales con tu estrategia
-df = moving_average_crossover(df)
+# df = moving_average_crossover(df)
 
-print(df[['timestamp', 'close', 'SMA20', 'SMA50', 'position']].tail(10))
+# df = rsi_sma_strategy(df)
+
+strategy_name = os.getenv('STRATEGY', 'rsi_sma')
+
+if strategy_name == 'rsi_sma':
+    from src.strategy.rsi_sma import rsi_sma_strategy as strategy
+elif strategy_name == 'moving_average':
+    from src.strategy import moving_average_crossover as strategy
+else:
+    raise ValueError(f"❌ Estrategia desconocida: {strategy_name}")
+
+df = strategy(df)
+
+print(f"📌 Estrategia seleccionada: {strategy_name}")
+print("")
+
+
+columns_to_print = ['timestamp', 'close', 'position']
+
+
+if strategy_name == 'rsi_sma':
+    columns_to_print += ['RSI', 'SMA']
+elif strategy_name == 'moving_average':
+    columns_to_print += ['SMA20', 'SMA50']
+
+print(df[columns_to_print].tail(10))
 
 # Lanzar backtest
 df, final_capital, metrics = backtest_signals(df)
