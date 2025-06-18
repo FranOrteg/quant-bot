@@ -29,6 +29,10 @@ df = strategy(df)
 print(f"📌 Estrategia seleccionada: {strategy_name}")
 print("")
 
+print("\n🔎 Conteo de señales:")
+print(df['position'].value_counts())
+print("")
+
 
 columns_to_print = ['timestamp', 'close', 'position']
 
@@ -45,6 +49,7 @@ df, final_capital, metrics = backtest_signals(df)
 
 # Mostrar métricas clave
 print("📊 Resultados del backtest:")
+print("")
 print(f"Capital final: ${final_capital:,.2f}")
 print(f"Retorno total: {metrics['total_return']*100:.2f}%")
 print(f"Sharpe Ratio: {metrics['sharpe_ratio']:.2f}")
@@ -58,5 +63,6 @@ plt.ylabel("Capital ($)")
 plt.grid(True)
 plt.tight_layout()
 plt.savefig("results/equity_curve.png")
+print("")
 print("📈 Gráfico guardado en results/equity_curve.png")
 

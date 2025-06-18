@@ -2,7 +2,7 @@
 
 import pandas as pd
 
-def rsi_sma_strategy(df, period_rsi=14, sma_period=20):
+def rsi_sma_strategy(df, period_rsi=5, sma_period=10):
     delta = df['close'].diff()
     gain = delta.where(delta > 0, 0).rolling(window=period_rsi).mean()
     loss = -delta.where(delta < 0, 0).rolling(window=period_rsi).mean()
@@ -12,7 +12,10 @@ def rsi_sma_strategy(df, period_rsi=14, sma_period=20):
     df['SMA'] = df['close'].rolling(window=sma_period).mean()
 
     df['position'] = 0
-    df.loc[(df['RSI'] < 30) & (df['close'] > df['SMA']), 'position'] = 1
-    df.loc[(df['RSI'] > 70) & (df['close'] < df['SMA']), 'position'] = -1
+
+    # ⚠️ Más sensible: compra si RSI < 40 y precio > SMA, venta si RSI > 60 y precio < SMA
+    df.loc[(df['RSI'] < 40) & (df['close'] > df['SMA']), 'position'] = 1
+    df.loc[(df['RSI'] > 60) & (df['close'] < df['SMA']), 'position'] = -1
 
     return df
+
