@@ -24,7 +24,11 @@ else:
     raise ValueError(f"❌ Estrategia desconocida: {strategy_name}")
 
 # === Aplicar estrategia ===
-df = strategy(df)
+if strategy_name == 'moving_average':
+    df = strategy(df, short_window=30, long_window=50)
+else:
+    df = strategy(df)
+
 
 print(f"📌 Estrategia seleccionada: {strategy_name}\n")
 print("🔎 Conteo de señales:")
