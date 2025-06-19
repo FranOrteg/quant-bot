@@ -6,9 +6,11 @@ import os
 
 app = Flask(__name__)
 
-TRADES_PATH = 'logs/trades.csv'
-PRICE_PATH = 'data/BTCUSDT.csv'
-REPORT_PATH = os.path.join(os.path.dirname(__file__), '..', 'results', 'summary_report.pdf')
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+TRADES_PATH = os.path.join(BASE_DIR, 'logs/trades.csv')
+PRICE_PATH = os.path.join(BASE_DIR, 'data/BTCUSDT.csv')
+REPORT_PATH = os.path.join(BASE_DIR, 'results/summary_report.pdf')
 
 TEMPLATE = '''
 <!DOCTYPE html>
@@ -100,4 +102,5 @@ def download_report():
     return "No se ha generado el informe aún.", 404
 
 if __name__ == '__main__':
-    app.run(debug=True, port=5001)
+    app.run(host='0.0.0.0', port=5001, debug=True)
+
