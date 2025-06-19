@@ -10,6 +10,7 @@ from src.paper_trading import buy, sell, get_price
 from src.strategy_selector import select_best_strategy
 from src.strategy import moving_average_crossover, rsi_sma_strategy, macd_strategy
 import logging
+import json
 
 load_dotenv()
 
@@ -43,6 +44,20 @@ def save_to_csv(row, filename='data/BTCUSDT.csv'):
     os.makedirs('data', exist_ok=True)
     file_exists = os.path.isfile(filename)
     pd.DataFrame([row]).to_csv(filename, mode='a', index=False, header=not file_exists)
+    
+def log_operation(action, price, filename='logs/trades.csv'):
+    os.makedirs('logs', exist_ok=True)
+    file_exists = os.path.isfile(filename)
+    data = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "symbol": symbol,
+        "action": action,
+        "price": price,
+        "strategy_name": strategy_name,
+        "params": json.dumps(params)
+    }
+    pd.DataFrame([data]).to_csv(filename, mode='a', index=False, header=not file_exists)
+
 
 def run_bot():
     position = 0
@@ -62,14 +77,19 @@ def run_bot():
         if last_row['position'] == 1 and position == 0:
             logging.info("🟢 Señal de COMPRA detectada")
             buy(symbol)
+            log_operation("BUY", last_row['close'])
             position = 1
 
         elif last_row['position'] == -1 and position == 1:
             logging.info("🔴 Señal de VENTA detectada")
             sell(symbol)
+            log_operation("SELL", last_row['close'])
             position = 0
 
         time.sleep(interval)
+        
+
+
 
 if __name__ == "__main__":
     run_bot()
