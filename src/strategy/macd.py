@@ -1,3 +1,5 @@
+# src/strategy/macd.py
+
 import pandas as pd
 
 def macd_strategy(df, short_ema=12, long_ema=26, signal_ema=9):

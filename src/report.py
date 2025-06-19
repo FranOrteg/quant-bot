@@ -6,6 +6,9 @@ from datetime import datetime
 import os
 
 def generate_pdf_report(strategy_name, metrics, chart_path='results/equity_curve.png', output_path='results/report.pdf'):
+    """
+    Genera un informe en PDF con las métricas del backtest y un gráfico de equity.
+    """
     os.makedirs('results', exist_ok=True)
     now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
 
@@ -24,7 +27,7 @@ def generate_pdf_report(strategy_name, metrics, chart_path='results/equity_curve
         c.drawString(50, y, f"{key.replace('_', ' ').capitalize()}: {value:.4f}")
         y -= 20
 
-    # Añadir imagen del gráfico
+    # Añadir imagen del gráfico si existe
     if os.path.exists(chart_path):
         c.drawImage(chart_path, 50, 100, width=500, preserveAspectRatio=True, mask='auto')
 
