@@ -11,3 +11,7 @@ def moving_average_crossover(df, short_window=20, long_window=50):
 
     df['position'] = df['signal'].diff()
     return df
+
+# 👇 Importa otras estrategias para exponerlas al paquete
+from .rsi_sma import rsi_sma_strategy
+from .macd import macd_strategy
