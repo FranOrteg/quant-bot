@@ -17,16 +17,21 @@ def calculate_daily_performance():
     trades = trades.dropna(subset=["timestamp", "price", "action"]).sort_values("timestamp")
 
     # Agrupar por día (en UTC)
+    # Agrupar por fecha
     trades["date"] = trades["timestamp"].dt.date
     grouped = trades.groupby("date")
-
+    
+    print(f"📅 Días detectados: {list(grouped.groups.keys())}")  # Añade esta línea de debug
+    
     records = []
     equity = INITIAL_BALANCE
     btc_balance = 0.0
-
+    
     for date, day_trades in grouped:
+        print(f"\n🗓️ Procesando día: {date} | Operaciones: {len(day_trades)}")
+    
         day_start_equity = equity
-
+    
         for _, row in day_trades.iterrows():
             price = row["price"]
             if row["action"] == "BUY":
@@ -35,12 +40,12 @@ def calculate_daily_performance():
             elif row["action"] == "SELL":
                 btc_balance -= 0.001
                 equity += 0.001 * price
-
+    
         day_end_equity = equity + (btc_balance * day_trades.iloc[-1]["price"])
         net_return = day_end_equity - day_start_equity
         pct_return = (net_return / day_start_equity) * 100 if day_start_equity > 0 else 0
         drawdown = (day_trades["price"].max() - day_trades["price"].min()) / day_trades["price"].max() * 100
-
+    
         records.append({
             "date": date,
             "start_equity": round(day_start_equity, 2),
@@ -50,6 +55,7 @@ def calculate_daily_performance():
             "drawdown_pct": round(drawdown, 2),
             "num_trades": len(day_trades),
         })
+    
 
     df_daily = pd.DataFrame(records)
     os.makedirs("logs", exist_ok=True)
