@@ -23,6 +23,7 @@ def generate_summary_report():
     total_ops = len(trades)
     buys = len(buy_trades)
     sells = len(sell_trades)
+    paired_ops = min(buys, sells)
 
     metrics = {
         'total_operaciones': total_ops,
@@ -30,15 +31,16 @@ def generate_summary_report():
         'sell': sells
     }
 
-    if buys == sells and buys > 0:
-        profit_ops = (sell_trades['price'].values - buy_trades['price'].values)
-        metrics['retorno_total'] = profit_ops.sum()
-        metrics['porcentaje_total'] = (profit_ops / buy_trades['price'].values * 100).sum()
+    if paired_ops > 0:
+        buy_prices = buy_trades['price'].values[:paired_ops]
+        sell_prices = sell_trades['price'].values[:paired_ops]
+        profit_ops = sell_prices - buy_prices
+        metrics['retorno_total'] = round(profit_ops.sum(), 2)
+        metrics['porcentaje_total'] = round((profit_ops / buy_prices * 100).sum(), 2)
     else:
         metrics['retorno_total'] = 0.0
         metrics['porcentaje_total'] = 0.0
 
-    # Generar PDF
     generate_pdf_report(
         strategy_name="RSI + SMA Crossover",
         metrics=metrics,
@@ -49,6 +51,5 @@ def generate_summary_report():
     print(f"✅ Informe PDF generado en: {OUTPUT_PATH}")
     return OUTPUT_PATH
 
-# Solo para pruebas locales (opcional)
 if __name__ == "__main__":
     generate_summary_report()
