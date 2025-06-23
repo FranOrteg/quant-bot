@@ -1,7 +1,10 @@
+# src/paper_trading.py
+
 import os
 from binance.client import Client
 from dotenv import load_dotenv
 from src.utils import log_operation  # 🔁 ahora importamos desde utils
+from src.balance_tracker import update_balance
 
 load_dotenv()
 
@@ -26,6 +29,7 @@ def buy(symbol, price, strategy_name, params):
     )
     print(f"✅ ORDEN COMPRA: {order}")
     log_operation(symbol, "BUY", price, strategy_name, params)
+    update_balance("BUY", quantity, price)
     return order
 
 def sell(symbol, price, strategy_name, params):
@@ -37,4 +41,5 @@ def sell(symbol, price, strategy_name, params):
     )
     print(f"✅ ORDEN VENTA: {order}")
     log_operation(symbol, "SELL", price, strategy_name, params)
+    update_balance("SELL", quantity, price)
     return order

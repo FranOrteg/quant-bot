@@ -1,6 +1,6 @@
 # src/web_dashboard.py
 
-from flask import Flask, render_template_string, send_file
+from flask import Flask, jsonify, render_template_string, send_file
 import pandas as pd
 import os
 
@@ -100,6 +100,12 @@ def download_report():
     if os.path.exists(REPORT_PATH):
         return send_file(REPORT_PATH, as_attachment=True)
     return "No se ha generado el informe aún.", 404
+  
+@app.route("/balance")
+def show_balance():
+    from src.balance_tracker import load_balance
+    return jsonify(load_balance())
+
 
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
