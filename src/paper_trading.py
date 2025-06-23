@@ -1,10 +1,7 @@
-# src/paper_trading.py
 import os
 from binance.client import Client
 from dotenv import load_dotenv
-from datetime import datetime, timezone
-import pandas as pd
-import json
+from src.utils import log_operation  # 🔁 ahora importamos desde utils
 
 load_dotenv()
 
@@ -28,7 +25,7 @@ def buy(symbol, price, strategy_name, params):
         quantity=quantity
     )
     print(f"✅ ORDEN COMPRA: {order}")
-    log_trade(symbol, "BUY", price, strategy_name, params)
+    log_operation(symbol, "BUY", price, strategy_name, params)
     return order
 
 def sell(symbol, price, strategy_name, params):
@@ -39,18 +36,5 @@ def sell(symbol, price, strategy_name, params):
         quantity=quantity
     )
     print(f"✅ ORDEN VENTA: {order}")
-    log_trade(symbol, "SELL", price, strategy_name, params)
+    log_operation(symbol, "SELL", price, strategy_name, params)
     return order
-
-def log_trade(symbol, action, price, strategy_name, params, filename='logs/trades.csv'):
-    os.makedirs('logs', exist_ok=True)
-    file_exists = os.path.isfile(filename)
-    trade = {
-        "timestamp": datetime.now(timezone.utc).isoformat(),
-        "symbol": symbol,
-        "action": action,
-        "price": price,
-        "strategy_name": strategy_name,
-        "params": json.dumps(params)
-    }
-    pd.DataFrame([trade]).to_csv(filename, mode='a', index=False, header=not file_exists)

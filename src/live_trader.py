@@ -8,6 +8,7 @@ from datetime import datetime, timezone
 from src.paper_trading import buy, sell, get_price
 from src.strategy_selector import select_best_strategy
 from src.strategy import moving_average_crossover, rsi_sma_strategy, macd_strategy
+from src.utils import log_operation
 import logging
 
 load_dotenv()
