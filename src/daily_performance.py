@@ -1,65 +1,69 @@
 # src/daily_performance.py
 import pandas as pd
-from datetime import datetime
 import os
+from datetime import timezone, datetime
 
-TRADES_PATH = "logs/trades.csv"
+TRADES_PATH          = "logs/trades.csv"
 PERFORMANCE_LOG_PATH = "logs/performance_log.csv"
-INITIAL_BALANCE = 10000.0
+INITIAL_BALANCE      = 10_000.0           # ← capital inicial
 
-def calculate_daily_performance():
+def calculate_daily_performance() -> None:
     if not os.path.exists(TRADES_PATH):
-        print("❌ No se encontró el archivo de trades.")
+        print("❌  No se encontró logs/trades.csv")
         return
 
-    trades = pd.read_csv(TRADES_PATH)
-    trades["timestamp"] = pd.to_datetime(trades["timestamp"], utc=True, errors='coerce')
-    trades = trades.dropna(subset=["timestamp", "price", "action"]).sort_values("timestamp")
+    # --- leer y limpiar -----------------------------------------------
+    df = pd.read_csv(TRADES_PATH)
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
 
-    trades["date"] = trades["timestamp"].dt.date
-    grouped = trades.groupby("date")
+    # price como numérico (coerción ⇒ NaN si no convierte)
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
 
-    print(f"📅 Días detectados: {list(grouped.groups.keys())}")
+    # elimina cualquier fila inválida
+    df = df.dropna(subset=["timestamp", "price", "action"]).sort_values("timestamp")
 
-    records = []
-    equity = INITIAL_BALANCE
-    btc_balance = 0.0
+    # --- preparar ------------------------------------------------------
+    df["date"] = df["timestamp"].dt.date
+    grouped     = df.groupby("date")
+    print("📅  Días detectados:", list(grouped.groups))
 
-    for date, day_trades in grouped:
-        print(f"\n🗓️ Procesando día: {date} | Operaciones: {len(day_trades)}")
+    equity       = INITIAL_BALANCE     # USDT + BTC en USDT
+    btc_balance  = 0.0
+    daily_rows   = []
 
-        day_start_equity = equity
+    for date, trades in grouped:
+        day_start = equity
 
-        for _, row in day_trades.iterrows():
-            price = row["price"]
-            if row["action"].upper() == "BUY":
+        # recorrer trades del día
+        for _, r in trades.iterrows():
+            if r["action"].upper() == "BUY":
                 btc_balance += 0.001
-                equity -= 0.001 * price
-            elif row["action"].upper() == "SELL":
+                equity     -= 0.001 * r["price"]
+            elif r["action"].upper() == "SELL":
                 btc_balance -= 0.001
-                equity += 0.001 * price
+                equity     += 0.001 * r["price"]
 
-        day_end_equity = equity + (btc_balance * day_trades.iloc[-1]["price"])
-        net_return = day_end_equity - day_start_equity
-        pct_return = (net_return / day_start_equity) * 100 if day_start_equity > 0 else 0
-        drawdown = (day_trades["price"].max() - day_trades["price"].min()) / day_trades["price"].max() * 100
+        # equity al cierre del día = USDT + BTC-mark-to-market
+        day_end   = equity + btc_balance * trades.iloc[-1]["price"]
+        net_ret   = day_end - day_start
+        pct_ret   = (net_ret / day_start) * 100 if day_start else 0
+        drawdown  = (trades["price"].max() - trades["price"].min()) / trades["price"].max() * 100
 
-        records.append({
-            "date": date,
-            "start_equity": round(day_start_equity, 2),
-            "end_equity": round(day_end_equity, 2),
-            "net_return_usdt": round(net_return, 2),
-            "net_return_pct": round(pct_return, 2),
-            "drawdown_pct": round(drawdown, 2),
-            "num_trades": len(day_trades),
+        daily_rows.append({
+            "date"            : date,
+            "start_equity"    : round(day_start,  2),
+            "end_equity"      : round(day_end,    2),
+            "net_return_usdt" : round(net_ret,    2),
+            "net_return_pct"  : round(pct_ret,    2),
+            "drawdown_pct"    : round(drawdown,   2),
+            "num_trades"      : len(trades),
         })
 
-        equity = day_end_equity  # Muy importante: actualizar equity acumulada
+        equity = day_end   # ¡muy importante!
 
-    df_daily = pd.DataFrame(records)
-    os.makedirs("logs", exist_ok=True)
-    df_daily.to_csv(PERFORMANCE_LOG_PATH, index=False)
-    print(f"\n✅ Rendimiento diario guardado en: {PERFORMANCE_LOG_PATH}")
+    # --- guardar -------------------------------------------------------
+    pd.DataFrame(daily_rows).to_csv(PERFORMANCE_LOG_PATH, index=False)
+    print(f"✅  Rendimiento diario actualizado → {PERFORMANCE_LOG_PATH}")
 
 if __name__ == "__main__":
     calculate_daily_performance()
