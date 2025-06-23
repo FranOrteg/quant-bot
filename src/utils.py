@@ -1,11 +1,13 @@
 import os
 import json
 import pandas as pd
+import numpy as np
 from datetime import datetime, timezone
 
 def log_operation(symbol, action, price, strategy_name, params, filename='logs/trades.csv'):
     os.makedirs('logs', exist_ok=True)
     file_exists = os.path.isfile(filename)
+
     data = {
         "timestamp": datetime.now(timezone.utc).isoformat(),
         "symbol": symbol,
@@ -14,8 +16,15 @@ def log_operation(symbol, action, price, strategy_name, params, filename='logs/t
         "strategy_name": strategy_name,
         "params": json.dumps(convert_params(params))
     }
+
     pd.DataFrame([data]).to_csv(filename, mode='a', index=False, header=not file_exists)
 
-
 def convert_params(params):
-    return {k: (int(v) if isinstance(v, (int, float)) and not isinstance(v, bool) else str(v)) for k, v in params.items()}
+    def sanitize(v):
+        if isinstance(v, (int, float, str)):
+            return v
+        if isinstance(v, (np.integer, np.floating)):
+            return v.item()
+        return str(v)
+
+    return {k: sanitize(v) for k, v in params.items()}
