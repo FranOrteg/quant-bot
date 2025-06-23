@@ -3,55 +3,76 @@ import pandas as pd
 import matplotlib.pyplot as plt
 import os
 import json
+import re
 
 TRADES_PATH = "logs/trades.csv"
-CHART_PATH = "results/trade_analysis.png"
+CHART_PATH  = "results/trade_analysis.png"
 METRICS_PATH = "results/trade_metrics.txt"
+INITIAL_BALANCE = 10_000.0
 
-os.makedirs("results", exist_ok=True)
+def main() -> None:
+    if not os.path.exists(TRADES_PATH):
+        print("❌  No se encontró logs/trades.csv")
+        return
 
-trades = pd.read_csv(TRADES_PATH)
-trades["timestamp"] = pd.to_datetime(trades["timestamp"], utc=True, errors='coerce')
-trades = trades.dropna(subset=["timestamp", "price", "action"]).sort_values("timestamp")
+    # -------- leer & normalizar --------------------------------------
+    df = pd.read_csv(TRADES_PATH)
 
-initial_balance = 10000.0
-btc_balance = 0.0
-usdt_balance = initial_balance
-equity_curve = []
+    # quitar microsegundos (.xxxxxx) para compatibilidad pandas 1.x
+    df["timestamp"] = df["timestamp"].astype(str).apply(
+        lambda s: re.sub(r"\.\d{1,6}\+00:00$", "+00:00", s)
+    )
+    df["timestamp"] = pd.to_datetime(df["timestamp"], utc=True, errors="coerce")
 
-for _, row in trades.iterrows():
-    price = row["price"]
-    if row["action"] == "BUY":
-        btc_balance += 0.001
-        usdt_balance -= 0.001 * price
-    elif row["action"] == "SELL":
-        btc_balance -= 0.001
-        usdt_balance += 0.001 * price
-    equity = usdt_balance + btc_balance * price
-    equity_curve.append((row["timestamp"], equity))
+    df["price"] = pd.to_numeric(df["price"], errors="coerce")
+    df = df.dropna(subset=["timestamp", "price", "action"]).sort_values("timestamp")
 
-df = pd.DataFrame(equity_curve, columns=["timestamp", "equity"])
-df.to_csv("results/equity.csv", index=False)
+    # -------- recorrer trades y calcular equity ----------------------
+    btc_balance   = 0.0
+    usdt_balance  = INITIAL_BALANCE
+    equity_curve  = []
 
-# Métricas
-final_equity = df["equity"].iloc[-1]
-total_return = final_equity - initial_balance
-return_pct = (total_return / initial_balance) * 100
-drawdown = (df["equity"].cummax() - df["equity"]).max()
+    for _, row in df.iterrows():
+        price = row["price"]
+        if row["action"].upper() == "BUY":
+            btc_balance  += 0.001
+            usdt_balance -= 0.001 * price
+        elif row["action"].upper() == "SELL":
+            btc_balance  -= 0.001
+            usdt_balance += 0.001 * price
 
-with open(METRICS_PATH, "w") as f:
-    f.write(f"Operaciones: {len(trades)}\n")
-    f.write(f"Equity final: {final_equity:.2f} USDT\n")
-    f.write(f"Retorno total: {total_return:.2f} USDT\n")
-    f.write(f"Retorno porcentaje: {return_pct:.2f}%\n")
-    f.write(f"Drawdown máximo: {drawdown:.2f} USDT\n")
+        equity = usdt_balance + btc_balance * price
+        equity_curve.append((row["timestamp"], equity))
 
-# Plot
-plt.figure(figsize=(10, 5))
-plt.plot(df["timestamp"], df["equity"], label="Equity", color="blue")
-plt.title("📈 Evolución del Capital (Equity)")
-plt.xlabel("Fecha")
-plt.ylabel("Capital Total (USDT)")
-plt.grid(True)
-plt.tight_layout()
-plt.savefig(CHART_PATH)
+    eq_df = pd.DataFrame(equity_curve, columns=["timestamp", "equity"])
+    os.makedirs("results", exist_ok=True)
+    eq_df.to_csv("results/equity.csv", index=False)
+
+    # -------- métricas ----------------------------------------------
+    final_equity  = eq_df["equity"].iloc[-1]
+    total_return  = final_equity - INITIAL_BALANCE
+    return_pct    = (total_return / INITIAL_BALANCE) * 100
+    drawdown      = (eq_df["equity"].cummax() - eq_df["equity"]).max()
+
+    with open(METRICS_PATH, "w") as f:
+        f.write(f"Operaciones: {len(df)}\n")
+        f.write(f"Equity final: {final_equity:.2f} USDT\n")
+        f.write(f"Retorno total: {total_return:.2f} USDT\n")
+        f.write(f"Retorno porcentaje: {return_pct:.2f}%\n")
+        f.write(f"Drawdown máximo: {drawdown:.2f} USDT\n")
+
+    # -------- gráfico -----------------------------------------------
+    plt.figure(figsize=(10, 5))
+    plt.plot(eq_df["timestamp"], eq_df["equity"])
+    plt.title("Evolución del Capital (Equity)")
+    plt.xlabel("Fecha")
+    plt.ylabel("Capital Total (USDT)")
+    plt.grid(True)
+    plt.tight_layout()
+    plt.savefig(CHART_PATH)
+    plt.close()
+
+    print("✅  trade_metrics.txt y gráfico actualizados.")
+
+if __name__ == "__main__":
+    main()
