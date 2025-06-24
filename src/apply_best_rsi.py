@@ -22,7 +22,7 @@ print(f"Estrategia: rsi_sma, RSI{rsi_period}, SMA{sma_period}, Buy<{rsi_buy}, Se
 
 # === Obtener datos y aplicar estrategia ===
 df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=500)
-df = rsi_sma_strategy(df, period_rsi=rsi_period, sma_period=sma_period, rsi_buy=rsi_buy, rsi_sell=rsi_sell)
+df = rsi_sma_strategy(df, rsi_period=rsi_period, sma_period=sma_period, rsi_buy=rsi_buy, rsi_sell=rsi_sell)
 
 # === Ejecutar backtest y guardar resultados ===
 df, capital_final, metrics = backtest_signals(df)

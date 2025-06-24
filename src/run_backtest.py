@@ -1,3 +1,5 @@
+# src/run_backtest.py
+
 import pandas as pd
 from src.backtest import backtest_signals
 import matplotlib.pyplot as plt
@@ -8,7 +10,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === Cargar datos desde Binance API y guardarlos en CSV ===
-df = get_historical_data(symbol='BTC/USDT', timeframe='5m', limit=6000)
+df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=60*24)
 df.to_csv('data/BTCUSDT.csv', index=False)
 
 # === Cargar estrategia desde .env ===

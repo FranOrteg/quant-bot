@@ -30,7 +30,7 @@ for rsi_p in rsi_periods:
                 df_copy = df.copy()
                 df_copy = rsi_sma_strategy(
                     df_copy,
-                    period_rsi=rsi_p,
+                    rsi_period=rsi_p,
                     sma_period=sma_p,
                     rsi_buy=rsi_buy,
                     rsi_sell=rsi_sell
