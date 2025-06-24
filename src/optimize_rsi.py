@@ -5,11 +5,16 @@ import matplotlib.pyplot as plt
 from src.backtest import backtest_signals
 from src.strategy.rsi_sma import rsi_sma_strategy
 from src.binance_api import get_historical_data
-import os
+import os, argparse
 from datetime import datetime
 
-# === Obtener datos reales ===
-df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=500)
+# ── CLI ─────────────────────────────────────────────────────────────────
+parser = argparse.ArgumentParser()
+parser.add_argument("--timeframe", default="1h")
+parser.add_argument("--limit",     type=int, default=8000)
+args = parser.parse_args()
+
+df = get_historical_data("BTC/USDT", args.timeframe, args.limit)
 
 # === Rango de parámetros a probar ===
 rsi_periods = [5, 10, 14, 21]
@@ -53,7 +58,8 @@ for rsi_p in rsi_periods:
 # === Guardar resultados ===
 os.makedirs('results', exist_ok=True)
 results_df = pd.DataFrame(results)
-results_df.to_csv('results/rsi_optimization.csv', index=False)
+output = f"results/rsi_optimization_{args.timeframe}.csv"
+results_df.to_csv(output, index=False)
 
 # === Mostrar top 5 setups ===
 print("\n📈 Top 5 configuraciones RSI + SMA por retorno total:")

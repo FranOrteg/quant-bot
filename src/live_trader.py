@@ -1,74 +1,73 @@
 # src/live_trader.py
 
-import time
+import time, os, logging
 from dotenv import load_dotenv
-import os
 import pandas as pd
 from datetime import datetime, timezone
+
+from src.binance_api import get_historical_data
 from src.paper_trading import buy, sell, get_price
 from src.strategy_selector import select_best_strategy
-from src.strategy import moving_average_crossover, rsi_sma_strategy, macd_strategy
-from src.utils import log_operation
-import logging
+from src.utils import log_operation        # ← se sigue usando más abajo
 
 load_dotenv()
 
-symbol = 'BTCUSDT'
-interval = 60 * 5  # cada 5 minutos
-history = []
+SYMBOL     = "BTCUSDT"
+TIMEFRAME  = "15m"
+BOOT_LIMIT = 400                      # ≈4 días (suficiente para SMA/RSI)
 
-# 🧠 Cargamos la mejor estrategia
-strategy_name, strategy_func, params, _ = select_best_strategy()
+# ⏱ convierte "15m", "1h"…  ➜ segundos
+unit = TIMEFRAME[-1]
+mult = int(TIMEFRAME[:-1])
+INTERVAL = mult * (60 if unit == "m" else 3600)
 
-os.makedirs('logs', exist_ok=True)
-logging.basicConfig(
-    filename='logs/live_trader.log',
-    level=logging.INFO,
-    format='%(asctime)s [%(levelname)s] %(message)s',
-)
+# ── historial inicial ───────────────────────────────────────────────────
+history = get_historical_data(SYMBOL, TIMEFRAME, BOOT_LIMIT).to_dict("records")
+
+# 🧠 elige la mejor estrategia PARA ESTE TF
+strategy_name, strategy_func, params, _ = select_best_strategy(TIMEFRAME)
+logging.basicConfig(filename="logs/live_trader.log",
+                    level=logging.INFO,
+                    format="%(asctime)s [%(levelname)s] %(message)s")
+logging.info(f"🧠 Estrategia {strategy_name}  TF={TIMEFRAME}  params={params}")
+
+# ── utilidades ──────────────────────────────────────────────────────────
+def save_to_csv(row, filename=f"data/{SYMBOL}_{TIMEFRAME}.csv"):
+    os.makedirs("data", exist_ok=True)
+    file_exists = os.path.isfile(filename)
+    pd.DataFrame([row]).to_csv(filename, mode="a", index=False, header=not file_exists)
 
 def fetch_historical_prices():
-    global history
-    now = datetime.now(timezone.utc)
-    price = get_price(symbol)
-    history.append({'timestamp': now, 'close': price})
-
-    save_to_csv({'timestamp': now.isoformat(), 'close': price})
-
+    last = get_historical_data(SYMBOL, TIMEFRAME, 2).iloc[-1]
+    history.append(last.to_dict())
+    save_to_csv(last.to_dict())
     df = pd.DataFrame(history)
-    df = strategy_func(df, **params)
-    return df
+    return strategy_func(df, **params)
 
-def save_to_csv(row, filename='data/BTCUSDT.csv'):
-    os.makedirs('data', exist_ok=True)
-    file_exists = os.path.isfile(filename)
-    pd.DataFrame([row]).to_csv(filename, mode='a', index=False, header=not file_exists)
-
+# ── bucle principal ─────────────────────────────────────────────────────
 def run_bot():
     position = 0
-    logging.info(f"🧠 Iniciando bot con estrategia: {strategy_name} | Parámetros: {params}")
-    
     while True:
         df = fetch_historical_prices()
-        if df.empty or 'position' not in df.columns:
+        if df.empty or "position" not in df.columns:
             logging.warning("⚠️ Datos insuficientes para generar señal")
-            time.sleep(interval)
+            time.sleep(INTERVAL)
             continue
 
-        last_row = df.iloc[-1]
-        logging.info(f"Precio: {last_row['close']} | Señal: {last_row['position']}")
+        last = df.iloc[-1]
+        logging.info(f"Precio: {last.close:.2f} | Señal: {last.position}")
 
-        if last_row['position'] == 1 and position == 0:
+        if last.position == 1 and position == 0:
             logging.info("🟢 Señal de COMPRA detectada")
-            buy(symbol, last_row['close'], strategy_name, params)
+            buy(SYMBOL, last.close, strategy_name, params)
             position = 1
 
-        elif last_row['position'] == -1 and position == 1:
+        elif last.position == -1 and position == 1:
             logging.info("🔴 Señal de VENTA detectada")
-            sell(symbol, last_row['close'], strategy_name, params)
+            sell(SYMBOL, last.close, strategy_name, params)
             position = 0
 
-        time.sleep(interval)
+        time.sleep(INTERVAL)
 
 if __name__ == "__main__":
     run_bot()

@@ -33,18 +33,18 @@ def get_best_from_csv(path, strategy_name, param_names):
             "metrics": metrics}
 
 
-def select_best_strategy():
-    # --- ② primero la receta óptima --------------------------------------
-    if "rsi_sma" in PRESET_OPTIMAL:
-        p = PRESET_OPTIMAL["rsi_sma"]
-        return ("rsi_sma", rsi_sma_strategy, p["params"], p["metrics"])
-    # ---------------------------------------------------------------------
-
-    # … mismo código que ya tenías para leer los CSV ----------------------
+def select_best_strategy(timeframe="1h"):
+    suffix = f"_{timeframe}" if timeframe != "1h" else ""
     candidates = [
-        get_best_from_csv("results/sma_optimization.csv",  "moving_average", ["short_window","long_window"]),
-        get_best_from_csv("results/rsi_optimization.csv",  "rsi_sma",        ["rsi_period","sma_period","rsi_buy","rsi_sell"]),
-        get_best_from_csv("results/macd_optimization.csv", "macd",           ["short_ema","long_ema","signal_ema"]),
+        get_best_from_csv(f"results/sma_optimization{suffix}.csv",
+                          "moving_average",
+                          ["short_window", "long_window"]),
+        get_best_from_csv(f"results/rsi_optimization{suffix}.csv",
+                          "rsi_sma",
+                          ["rsi_period", "sma_period", "rsi_buy", "rsi_sell"]),
+        get_best_from_csv(f"results/macd_optimization{suffix}.csv",
+                          "macd",
+                          ["short_ema", "long_ema", "signal_ema"]),
     ]
     candidates = [c for c in candidates if c]        # filtra None
     best = max(candidates, key=lambda x: x["metrics"]["total_return"])
