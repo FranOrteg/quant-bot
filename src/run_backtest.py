@@ -20,6 +20,8 @@ args = parser.parse_args()
 df = get_historical_data(symbol=args.symbol,
                          timeframe=args.timeframe,
                          limit=args.limit)
+
+print(f"📏 Filas descargadas: {len(df)}")
 df.to_csv('data/BTCUSDT.csv', index=False)
 
 # === Cargar estrategia desde .env ===
