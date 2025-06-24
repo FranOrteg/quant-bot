@@ -18,6 +18,8 @@ quantity = 0.001  # ajusta según tu balance simulado
 
 FEE_RATE = 0.001      # 0.1%
 SLIPPAGE = 0.0005     # 0.05%
+STOP_LOSS = -0.005    # –0.5 %
+TAKE_PROFIT =  0.01   # +1 %
 
 def get_price(symbol="BTCUSDT"):
     ticker = client.get_symbol_ticker(symbol=symbol)

@@ -8,7 +8,7 @@ from dotenv import load_dotenv
 load_dotenv()
 
 # === Cargar datos desde Binance API y guardarlos en CSV ===
-df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=500)
+df = get_historical_data(symbol='BTC/USDT', timeframe='5m', limit=6000)
 df.to_csv('data/BTCUSDT.csv', index=False)
 
 # === Cargar estrategia desde .env ===

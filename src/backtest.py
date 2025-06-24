@@ -10,6 +10,8 @@ def backtest_signals(df, initial_capital=10000):
     position = 0
     entry_price = 0
     equity_curve = []
+    FEE = 0.00075          # 0.075 % maker
+    SLIPPAGE = 0.0004      # 0.04 % ejecución
 
     for i in range(len(df)):
         price = df.iloc[i]['close']
@@ -17,10 +19,13 @@ def backtest_signals(df, initial_capital=10000):
 
         if signal == 1 and position == 0:
             position = 1
-            entry_price = price
+            entry_price = price * (1 + SLIPPAGE)
+            capital *= (1 - FEE)
         elif signal == -1 and position == 1:
-            pnl = (price - entry_price) / entry_price
+            exit_price = price * (1 - SLIPPAGE)
+            pnl = (exit_price - entry_price) / entry_price
             capital *= (1 + pnl)
+            capital *= (1 - FEE)
             position = 0
 
         equity_curve.append(capital)
