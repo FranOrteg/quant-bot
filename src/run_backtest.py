@@ -3,18 +3,27 @@
 import pandas as pd
 from src.backtest import backtest_signals
 import matplotlib.pyplot as plt
-import os
+import argparse, os
 from src.report import generate_pdf_report
 from src.binance_api import get_historical_data
 from dotenv import load_dotenv
 load_dotenv()
 
+parser = argparse.ArgumentParser()
+parser.add_argument("--symbol",     default="BTC/USDT")
+parser.add_argument("--timeframe",  default="1h")
+parser.add_argument("--limit",      type=int, default=500)     # barras a descargar
+parser.add_argument("--strategy",   default=os.getenv("STRATEGY", "rsi_sma"))
+args = parser.parse_args()
+
 # === Cargar datos desde Binance API y guardarlos en CSV ===
-df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=60*24)
+df = get_historical_data(symbol=args.symbol,
+                         timeframe=args.timeframe,
+                         limit=args.limit)
 df.to_csv('data/BTCUSDT.csv', index=False)
 
 # === Cargar estrategia desde .env ===
-strategy_name = os.getenv('STRATEGY', 'rsi_sma')
+strategy_name = args.strategy
 
 if strategy_name == 'rsi_sma':
     from src.strategy.rsi_sma import rsi_sma_strategy as strategy
