@@ -1,63 +1,64 @@
 # src/strategy_selector.py
-import os
-import pandas as pd
+
+import os, pandas as pd
 from src.strategy import moving_average_crossover, rsi_sma_strategy, macd_strategy
 
-# --- ① preset “ganador” ---------------------------------------------------
+# ── preset «por defecto» si no hay CSV ────────────────────────────────
 PRESET_OPTIMAL = {
-    "rsi_sma": {
-        "params": {"rsi_period": 14, "sma_period": 10,
-                   "rsi_buy": 30, "rsi_sell": 70},
-        "metrics": {"total_return": 0.0524}   # opcional
-    }
+    "rsi_sma": dict(params=dict(rsi_period=14, sma_period=10,
+                                rsi_buy=30,  rsi_sell=70),
+                    metrics=dict(total_return=0.00,
+                                 sharpe_ratio=0.0,
+                                 max_drawdown=0.0))
 }
-# -------------------------------------------------------------------------
+# ───────────────────────────────────────────────────────────────────────
 
-# Convierte cualquier tipo numpy a int o float estándar
-def convert_types(params):
-    return {k: int(v) if isinstance(v, (int, float)) else v for k, v in params.items()}
+def _convert(v):               # np.int64 → int
+    return int(v) if isinstance(v, (int, float)) else v
 
-def get_best_from_csv(path, strategy_name, param_names):
+def _best_from_csv(path, strat, param_cols):
     if not os.path.exists(path):
-        return None                # ← si aún no hay CSV
+        return None
     df = pd.read_csv(path)
     if df.empty:
         return None
-    best_row = df.sort_values("total_return", ascending=False).iloc[0]
-    params  = {k: best_row[k] for k in param_names}
-    metrics = dict(total_return=float(best_row["total_return"]),
-                   sharpe_ratio=float(best_row["sharpe_ratio"]),
-                   max_drawdown=float(best_row["max_drawdown"]))
-    return {"strategy": strategy_name,
-            "params": convert_types(params),
-            "metrics": metrics}
+    best = df.sort_values("total_return", ascending=False).iloc[0]
+    return dict(strategy=strat,
+                params={k: _convert(best[k]) for k in param_cols},
+                metrics=dict(total_return=float(best.total_return),
+                             sharpe_ratio=float(best.sharpe_ratio),
+                             max_drawdown=float(best.max_drawdown)))
 
-
-def select_best_strategy(timeframe="1h"):
-    suffix = f"_{timeframe}" if timeframe != "1h" else ""
-    candidates = [
-        get_best_from_csv(f"results/sma_optimization{suffix}.csv",
-                          "moving_average",
-                          ["short_window", "long_window"]),
-        get_best_from_csv(f"results/rsi_optimization{suffix}.csv",
-                          "rsi_sma",
-                          ["rsi_period", "sma_period", "rsi_buy", "rsi_sell"]),
-        get_best_from_csv(f"results/macd_optimization{suffix}.csv",
-                          "macd",
-                          ["short_ema", "long_ema", "signal_ema"]),
+def select_best_strategy(tf="1h"):
+    suf = f"_{tf}" if tf != "1h" else ""
+    cands = [
+        _best_from_csv(f"results/sma_optimization{suf}.csv",
+                       "moving_average", ["short_window", "long_window"]),
+        _best_from_csv(f"results/rsi_optimization{suf}.csv",
+                       "rsi_sma", ["rsi_period", "sma_period",
+                                   "rsi_buy",  "rsi_sell"]),
+        _best_from_csv(f"results/macd_optimization{suf}.csv",
+                       "macd", ["short_ema", "long_ema", "signal_ema"])
     ]
-    candidates = [c for c in candidates if c]        # filtra None
-    best = max(candidates, key=lambda x: x["metrics"]["total_return"])
+    cands = [c for c in cands if c]
 
-    strategy_map = {
-        "moving_average": moving_average_crossover,
-        "rsi_sma": rsi_sma_strategy,
-        "macd": macd_strategy
-    }
+    # ← fallback si aún está vacío
+    if not cands:
+        preset = PRESET_OPTIMAL["rsi_sma"]
+        cands = [dict(strategy="rsi_sma", **preset)]
 
-    print("\n🏆 Estrategia ganadora:")
-    print(f"🔹 Nombre: {best['strategy']}")
-    print(f"🔹 Parámetros: {best['params']}")
-    print(f"🔹 Métricas: {best['metrics']}")
+    best = max(cands, key=lambda x: x["metrics"]["total_return"])
 
-    return best["strategy"], strategy_map[best["strategy"]], best["params"], best["metrics"]
+    mapper = dict(moving_average=moving_average_crossover,
+                  rsi_sma=rsi_sma_strategy,
+                  macd=macd_strategy)
+
+    print("\n🏆 Estrategia ganadora")
+    print("   • Nombre     :", best["strategy"])
+    print("   • Parámetros :", best["params"])
+    print("   • Métricas   :", best["metrics"])
+
+    return (best["strategy"],
+            mapper[best["strategy"]],
+            best["params"],
+            best["metrics"])
