@@ -1,57 +1,59 @@
 # src/backtest.py
-
 import numpy as np
 import matplotlib.pyplot as plt
 from fpdf import FPDF
 import os
 
-def backtest_signals(df, initial_capital=10000):
-    capital = initial_capital
-    position = 0
-    entry_price = 0
+# ➊  factor de anualización según la resolución de la vela
+ANNUALIZATION = {
+    "1d":   252,          # 252 días bursátiles
+    "4h":  24*365/4,
+    "1h":  24*365,
+    "30m": 24*2*365,
+    "15m": 24*4*365,
+    "5m":  24*12*365,
+}
+
+def backtest_signals(df, initial_capital=10_000, timeframe="1h"):
+    capital, position, entry_price = initial_capital, 0, 0
     equity_curve = []
-    FEE = 0.00075          # 0.075 % maker
-    SLIPPAGE = 0.0004      # 0.04 % ejecución
+    FEE, SLIPPAGE = 0.00075, 0.0004          # 0.075 % / 0.04 %
 
-    for i in range(len(df)):
-        price = df.iloc[i]['close']
-        signal = df.iloc[i]['position']
+    for _, row in df.iterrows():
+        price   = row["close"]
+        signal  = row["position"]
 
-        if signal == 1 and position == 0:
-            position = 1
-            entry_price = price * (1 + SLIPPAGE)
+        if signal == 1 and position == 0:                       # ---- BUY ----
+            position, entry_price = 1, price * (1 + SLIPPAGE)
             capital *= (1 - FEE)
-        elif signal == -1 and position == 1:
+
+        elif signal == -1 and position == 1:                    # ---- SELL ---
             exit_price = price * (1 - SLIPPAGE)
-            pnl = (exit_price - entry_price) / entry_price
-            capital *= (1 + pnl)
-            capital *= (1 - FEE)
-            position = 0
+            pnl        = (exit_price - entry_price) / entry_price
+            capital   *= (1 + pnl) * (1 - FEE)
+            position   = 0
 
         equity_curve.append(capital)
 
-    df['equity'] = equity_curve
+    df["equity"]  = equity_curve
+    df["returns"] = df["equity"].pct_change().fillna(0)
 
-    total_return = (df['equity'].iloc[-1] / initial_capital) - 1
-    df['returns'] = df['equity'].pct_change().fillna(0)
-    std_returns = np.std(df['returns'])
+    # ➋  Sharpe ratio con annualization dinámico
+    mean_r, std_r = df["returns"].mean(), df["returns"].std()
+    ann_factor    = ANNUALIZATION.get(timeframe, 252)
+    sharpe_ratio  = 0 if std_r == 0 else mean_r / std_r * np.sqrt(ann_factor)
 
-    if std_returns == 0:
-        sharpe_ratio = 0
-    else:
-        sharpe_ratio = np.mean(df['returns']) / std_returns * np.sqrt(252)
-
-    rolling_max = df['equity'].cummax()
-    drawdown = (df['equity'] - rolling_max) / rolling_max
-    max_drawdown = drawdown.min()
+    rolling_max   = df["equity"].cummax()
+    max_drawdown  = ((df["equity"] - rolling_max) / rolling_max).min()
+    total_return  = df["equity"].iloc[-1] / initial_capital - 1
 
     metrics = {
-        'total_return': total_return,
-        'sharpe_ratio': sharpe_ratio,
-        'max_drawdown': max_drawdown
+        "total_return": total_return,
+        "sharpe_ratio": sharpe_ratio,
+        "max_drawdown": max_drawdown,
     }
-
     return df, capital, metrics
+
 
 def generate_equity_plot(df, filename='results/equity_curve.png'):
     plt.figure(figsize=(10, 5))
