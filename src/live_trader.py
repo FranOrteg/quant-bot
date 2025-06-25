@@ -15,8 +15,8 @@ TIMEFRAME  = "15m"              # ← cambia aquí si quieres otro TF
 BOOT_LIMIT = 400                # ≈4 días de velas para este TF
 
 # -------- intervalo dinámico ------------------------------------------
-unit   = TIMEFRAME[-1].lower()          # 'm'  ó  'h'
-mult   = int(TIMEFRAME[:-1])            # 15  ó  1 / 4…
+unit   = TIMEFRAME[-1].lower()
+mult   = int(TIMEFRAME[:-1])
 INTERVAL = mult * (60 if unit == "m" else 3600)
 # ----------------------------------------------------------------------
 
@@ -47,6 +47,8 @@ def fetch_historical_prices():
 def run_bot():
     position = 0
     while True:
+        start_time = time.time()
+
         df = fetch_historical_prices()
         if df.empty or "position" not in df.columns:
             logging.warning("⚠️ Datos insuficientes para generar señal")
@@ -66,7 +68,10 @@ def run_bot():
             sell(SYMBOL, last.close, strategy_name, params)
             position = 0
 
-        time.sleep(INTERVAL)
+        # Sincronización precisa con el reloj
+        elapsed = time.time() - start_time
+        sleep_time = max(0, INTERVAL - elapsed)
+        time.sleep(sleep_time)
 
 if __name__ == "__main__":
     run_bot()
