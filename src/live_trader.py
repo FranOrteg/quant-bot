@@ -23,7 +23,7 @@ INTERVAL = mult * (60 if unit == "m" else 3600)
 # historial inicial
 history = get_historical_data(SYMBOL, TIMEFRAME, BOOT_LIMIT).to_dict("records")
 
-strategy_name, strategy_func, params, _ = select_best_strategy(TIMEFRAME)
+strategy_name, strategy_func, params, _ = select_best_strategy(tf=TIMEFRAME)
 
 logging.basicConfig(filename="logs/live_trader.log",
                     level=logging.INFO,
