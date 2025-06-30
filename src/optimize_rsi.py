@@ -40,7 +40,7 @@ for rsi_p in rsi_periods:
                     rsi_buy=rsi_buy,
                     rsi_sell=rsi_sell
                 )
-                df_copy, capital, metrics = backtest_signals(df_copy)
+                df_copy, capital, metrics = backtest_signals(df_copy, timeframe=args.timeframe)
 
                 results.append({
                     'strategy': 'rsi_sma',
