@@ -35,7 +35,7 @@ def select_best_strategy(tf="1h"):
         _best_from_csv(f"results/sma_optimization{suf}.csv",
                        "moving_average", ["short_window", "long_window"]),
         dict(strategy="rsi_sma",
-            params={"rsi_period": 21, "sma_period": 15, "rsi_buy": 40, "rsi_sell": 60},
+            params={"rsi_period": 14, "sma_period": 10, "rsi_buy": 40, "rsi_sell": 60},
             metrics={"total_return": 7.48, "sharpe_ratio": 2.93, "max_drawdown": 0.08}),
         _best_from_csv(f"results/macd_optimization{suf}.csv",
                        "macd", ["short_ema", "long_ema", "signal_ema"])
