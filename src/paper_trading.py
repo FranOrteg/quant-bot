@@ -11,8 +11,13 @@ load_dotenv()
 api_key = os.getenv("BINANCE_API_KEY")
 api_secret = os.getenv("BINANCE_API_SECRET")
 
-client = Client(api_key, api_secret, testnet=True)
-client.API_URL = 'https://testnet.binance.vision/api'
+try:
+    client = Client(api_key, api_secret, testnet=True)
+    client.API_URL = 'https://testnet.binance.vision/api'
+    client.ping()
+except Exception as e:
+    print(f"❌ Binance API error al iniciar: {e}")
+    client = None
 
 quantity = 0.001  # ajusta según tu balance simulado
 
@@ -22,17 +27,23 @@ STOP_LOSS = -0.005    # –0.5 %
 TAKE_PROFIT =  0.01   # +1 %
 
 def get_price(symbol="BTCUSDT"):
+    if client is None:
+        print("⛔ No se puede obtener precio: Binance no disponible")
+        return 0.0
     ticker = client.get_symbol_ticker(symbol=symbol)
     return float(ticker['price'])
 
 def buy(symbol, price, strategy_name, params):
+    if client is None:
+        print("⛔ No se puede ejecutar COMPRA: Binance no disponible")
+        return None
+
     slippage_price = price * (1 + SLIPPAGE)
     fee = slippage_price * quantity * FEE_RATE
     total_cost = slippage_price * quantity + fee
 
     print(f"🟢 COMPRANDO a {slippage_price:.2f} (+slippage), fee: {fee:.4f} USDT")
 
-    # Simulación de orden real
     order = {
         "symbol": symbol,
         "side": "BUY",
@@ -46,6 +57,10 @@ def buy(symbol, price, strategy_name, params):
     return order
 
 def sell(symbol, price, strategy_name, params):
+    if client is None:
+        print("⛔ No se puede ejecutar VENTA: Binance no disponible")
+        return None
+
     slippage_price = price * (1 - SLIPPAGE)
     fee = slippage_price * quantity * FEE_RATE
     total_gain = slippage_price * quantity - fee
