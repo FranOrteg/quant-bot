@@ -1,6 +1,7 @@
-# src/balance_tracker.py
+# balance_tracker.py
 import os
 import json
+from src.utils import log_performance
 
 BALANCE_FILE = 'logs/balance.json'
 DEFAULT_BALANCE = {
@@ -30,3 +31,4 @@ def update_balance(action, quantity, price):
             balance["BTC"] -= quantity
             balance["USDT"] += quantity * price
     save_balance(balance)
+    log_performance(action, price, balance)
