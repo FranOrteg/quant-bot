@@ -12,14 +12,15 @@ from datetime import datetime
 parser = argparse.ArgumentParser()
 parser.add_argument("--timeframe", default="1h")
 parser.add_argument("--limit",     type=int, default=8000)
+parser.add_argument("--plot",      action="store_true", help="Generar gráfico del top 5")
 args = parser.parse_args()
 
 df = get_historical_data("BTC/USDT", args.timeframe, args.limit)
 
 # === Rango de parámetros a probar ===
-rsi_periods = [5, 10, 14, 21]
-sma_periods = [10, 15, 20, 30]
-rsi_buy_levels = [40, 35, 30]
+rsi_periods     = [5, 10, 14, 21]
+sma_periods     = [10, 15, 20, 30]
+rsi_buy_levels  = [40, 35, 30]
 rsi_sell_levels = [60, 65, 70]
 
 results = []
@@ -65,3 +66,18 @@ results_df.to_csv(output, index=False)
 print("\n📈 Top 5 configuraciones RSI + SMA por retorno total:")
 top5 = results_df.sort_values('total_return', ascending=False).head(5)
 print(top5.to_string(index=False))
+
+# === Gráfico opcional ===
+if args.plot:
+    plt.figure(figsize=(10, 5))
+    plt.bar(top5.index.astype(str), top5["total_return"], color='skyblue')
+    plt.title(f"Top 5 RSI + SMA ({args.timeframe})")
+    plt.ylabel("Retorno (%)")
+    plt.xlabel("Setup")
+    for i, row in top5.iterrows():
+        label = f"{row['rsi_period']}/{row['sma_period']} | {row['rsi_buy']}-{row['rsi_sell']}"
+        plt.text(i, row["total_return"] + 0.1, label, ha='center', fontsize=8, rotation=45)
+    plt.tight_layout()
+    plot_path = f"results/rsi_top5_{args.timeframe}.png"
+    plt.savefig(plot_path)
+    print(f"\n📊 Gráfico guardado en: {plot_path}")
