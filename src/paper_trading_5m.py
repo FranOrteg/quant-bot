@@ -1,11 +1,11 @@
-# src/paper_trading.py
+# src/paper_trading_5m.py
 
 import os
 import inspect
 from binance.client import Client
 from dotenv import load_dotenv
 from src.utils import log_operation
-from src.balance_tracker import update_balance
+from src.balance_tracker_5m import update_balance
 
 load_dotenv()
 
@@ -49,8 +49,8 @@ def buy(symbol, price, strategy_name, params):
 
     print(f"🟢 COMPRANDO a {slippage_price:.2f} (+slippage), fee: {fee:.4f} USDT")
 
-    log_operation(symbol, "BUY", slippage_price, strategy_name, params, trades_path)
-    update_balance("BUY", quantity, slippage_price + (slippage_price * FEE_RATE), perf_path)
+    log_operation(symbol, "BUY", slippage_price, strategy_name, params, filename=trades_path)
+    update_balance("BUY", quantity, slippage_price + slippage_price * FEE_RATE)
 
     return {
         "symbol": symbol,
@@ -70,8 +70,8 @@ def sell(symbol, price, strategy_name, params):
 
     print(f"🔴 VENDIENDO a {slippage_price:.2f} (-slippage), fee: {fee:.4f} USDT")
 
-    log_operation(symbol, "SELL", slippage_price, strategy_name, params, trades_path)
-    update_balance("SELL", quantity, slippage_price - (slippage_price * FEE_RATE), perf_path)
+    log_operation(symbol, "SELL", slippage_price, strategy_name, params, filename=trades_path)
+    update_balance("SELL", quantity, slippage_price + slippage_price * FEE_RATE)
 
     return {
         "symbol": symbol,
