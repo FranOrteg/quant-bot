@@ -1,7 +1,6 @@
 # src/paper_trading_5m.py
 
 import os
-import inspect
 from binance.client import Client
 from dotenv import load_dotenv
 from src.utils import log_operation
@@ -24,13 +23,12 @@ quantity = 0.001
 FEE_RATE = 0.001
 SLIPPAGE = 0.0005
 
-# === NUEVO: detectar sufijo de script (ej. "5m" si se ejecuta desde live_trader_5m.py) ===
-caller_file = os.path.basename(inspect.stack()[-1].filename)
-suffix = "_5m" if "5m" in caller_file else "_15m"
+# === SUFIJO FIJO PARA TIMEFRAME 5M ===
+TIMEFRAME_SUFFIX = "_5m"
 
 # === rutas diferenciadas ===
-trades_path = f"logs/trades{suffix}.csv"
-perf_path   = f"logs/performance_log{suffix}.csv"
+trades_path = f"logs/trades{TIMEFRAME_SUFFIX}.csv"
+perf_path   = f"logs/performance_log{TIMEFRAME_SUFFIX}.csv"
 
 def get_price(symbol="BTCUSDT"):
     if client is None:
