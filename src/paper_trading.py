@@ -13,8 +13,10 @@ api_key = os.getenv("BINANCE_API_KEY")
 api_secret = os.getenv("BINANCE_API_SECRET")
 
 try:
-    client = Client(api_key, api_secret, testnet=True)
-    client.API_URL = 'https://testnet.binance.vision/api'
+    # Si quieres usar el testnet, descomenta las siguientes dos líneas:
+    # client = Client(api_key, api_secret, testnet=True)
+    # client.API_URL = 'https://testnet.binance.vision/api'
+    client = Client(api_key, api_secret)
     client.ping()
 except Exception as e:
     print(f"❌ Binance API error al iniciar: {e}")
