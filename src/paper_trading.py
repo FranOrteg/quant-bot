@@ -22,7 +22,7 @@ except Exception as e:
     print(f"❌ Binance API error al iniciar: {e}")
     client = None
 
-quantity = 0.002
+quantity = 0.0002
 FEE_RATE = 0.001
 SLIPPAGE = 0.0005
 
