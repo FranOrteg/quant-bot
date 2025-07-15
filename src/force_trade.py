@@ -10,7 +10,7 @@ def main():
     action = sys.argv[1].upper()
     price = float(sys.argv[2]) if len(sys.argv) > 2 else get_price()
 
-    symbol = "BTCUSDT"
+    symbol = "BTCUSDC"  # Cambia aquí si quieres otro símbolo
     strategy_name, _, params, _ = select_best_strategy()
 
     if action == "BUY":

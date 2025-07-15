@@ -29,8 +29,9 @@ TIMEFRAME_SUFFIX = "_5m"
 # === rutas diferenciadas ===
 trades_path = f"logs/trades{TIMEFRAME_SUFFIX}.csv"
 perf_path   = f"logs/performance_log{TIMEFRAME_SUFFIX}.csv"
+symbol = os.getenv("TRADING_SYMBOL", "BTCUSDC")
 
-def get_price(symbol="BTCUSDT"):
+def get_price(symbol=symbol):
     if client is None:
         print("⛔ No se puede obtener precio: Binance no disponible")
         return 0.0
@@ -45,7 +46,7 @@ def buy(symbol, price, strategy_name, params):
     slippage_price = price * (1 + SLIPPAGE)
     fee = slippage_price * quantity * FEE_RATE
 
-    print(f"🟢 COMPRANDO a {slippage_price:.2f} (+slippage), fee: {fee:.4f} USDT")
+    print(f"🟢 COMPRANDO a {slippage_price:.2f} (+slippage), fee: {fee:.4f} USDC")
 
     log_operation(symbol, "BUY", slippage_price, strategy_name, params, filename=trades_path)
     update_balance("BUY", quantity, slippage_price + slippage_price * FEE_RATE)
@@ -66,7 +67,7 @@ def sell(symbol, price, strategy_name, params):
     slippage_price = price * (1 - SLIPPAGE)
     fee = slippage_price * quantity * FEE_RATE
 
-    print(f"🔴 VENDIENDO a {slippage_price:.2f} (-slippage), fee: {fee:.4f} USDT")
+    print(f"🔴 VENDIENDO a {slippage_price:.2f} (-slippage), fee: {fee:.4f} USDC")
 
     log_operation(symbol, "SELL", slippage_price, strategy_name, params, filename=trades_path)
     update_balance("SELL", quantity, slippage_price + slippage_price * FEE_RATE)

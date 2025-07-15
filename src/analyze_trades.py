@@ -5,7 +5,7 @@ import matplotlib.pyplot as plt
 import os
 
 TRADES_PATH = 'logs/trades.csv'
-PRICE_PATH = 'data/BTCUSDT.csv'
+PRICE_PATH = 'data/BTCUSDC.csv'
 OUTPUT_PATH = 'results/trade_analysis.png'
 
 # Leer datos
@@ -27,7 +27,7 @@ trades.reset_index(inplace=True)
 
 # Gráfico
 plt.figure(figsize=(12, 6))
-plt.plot(prices.index, prices['close'], label='BTCUSDT', color='blue', linewidth=1)
+plt.plot(prices.index, prices['close'], label='BTCUSDC', color='blue', linewidth=1)
 
 # Señales
 buy_trades = trades[trades['action'] == 'BUY']
@@ -37,7 +37,7 @@ plt.scatter(buy_trades['timestamp'], buy_trades['price'], color='green', marker=
 plt.scatter(sell_trades['timestamp'], sell_trades['price'], color='red', marker='v', label='SELL', zorder=5)
 
 # Estética
-plt.title('Historial de operaciones BTCUSDT')
+plt.title('Historial de operaciones BTCUSDC')
 plt.xlabel('Fecha')
 plt.ylabel('Precio (USD)')
 plt.legend()

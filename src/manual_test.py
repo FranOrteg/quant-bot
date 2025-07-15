@@ -2,7 +2,7 @@
 
 from src.paper_trading import buy, sell, get_price
 
-symbol = "BTCUSDT"
+symbol = "BTCUSDC"
 strategy_name = "rsi_sma"
 params = {"rsi_period": 14, "sma_period": 10, "rsi_buy": 40, "rsi_sell": 60}
 

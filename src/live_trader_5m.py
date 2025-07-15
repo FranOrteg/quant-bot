@@ -10,7 +10,7 @@ from src.utils import log_operation
 
 load_dotenv()
 
-SYMBOL     = "BTCUSDT"
+SYMBOL     = "BTCUSDC"          # ← cambia aquí si quieres otro símbolo
 TIMEFRAME  = "5m"              # ← cambia aquí si quieres otro TF
 BOOT_LIMIT = 400                # ≈4 días de velas para este TF
 

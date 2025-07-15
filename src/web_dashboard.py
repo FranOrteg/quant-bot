@@ -9,7 +9,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TRADES_PATH = os.path.join(BASE_DIR, 'logs/trades.csv')
-PRICE_PATH = os.path.join(BASE_DIR, 'data/BTCUSDT.csv')
+PRICE_PATH = os.path.join(BASE_DIR, 'data/BTCUSDC.csv')
 REPORT_PATH = os.path.join(BASE_DIR, 'results/summary_report.pdf')
 
 TEMPLATE = '''
@@ -46,7 +46,7 @@ TEMPLATE = '''
       data: {
         labels: labels,
         datasets: [
-          { label: 'BTCUSDT', data: prices, borderColor: 'blue', fill: false },
+          { label: 'BTCUSDC', data: prices, borderColor: 'blue', fill: false },
           { label: 'BUY', data: buySignals, backgroundColor: 'green', type: 'scatter', pointStyle: 'triangle', pointRadius: 6 },
           { label: 'SELL', data: sellSignals, backgroundColor: 'red', type: 'scatter', pointStyle: 'rectRot', pointRadius: 6 }
         ]

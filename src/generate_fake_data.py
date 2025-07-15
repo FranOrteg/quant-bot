@@ -13,6 +13,6 @@ timestamps = [start + timedelta(minutes=5*i) for i in range(rows)]
 
 df = pd.DataFrame({'timestamp': timestamps, 'close': prices})
 os.makedirs('data', exist_ok=True)
-df.to_csv('data/BTCUSDT.csv', index=False)
+df.to_csv('data/BTCUSDC.csv', index=False)
 
-print("✅ Datos simulados generados en data/BTCUSDT.csv")
+print("✅ Datos simulados generados en data/BTCUSDC.csv")
