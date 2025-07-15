@@ -1,5 +1,3 @@
-# src/web_dashboard.py
-
 from flask import Flask, jsonify, render_template_string, send_file
 import pandas as pd
 import os
@@ -9,7 +7,7 @@ app = Flask(__name__)
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 TRADES_PATH = os.path.join(BASE_DIR, 'logs/trades.csv')
-PRICE_PATH = os.path.join(BASE_DIR, 'data/BTCUSDC.csv')
+PERF_PATH   = os.path.join(BASE_DIR, 'logs/performance_log.csv')
 REPORT_PATH = os.path.join(BASE_DIR, 'results/summary_report.pdf')
 
 TEMPLATE = '''
@@ -60,17 +58,18 @@ TEMPLATE = '''
 
 @app.route('/')
 def dashboard():
-    trades = pd.read_csv(TRADES_PATH)
-    prices = pd.read_csv(PRICE_PATH, names=['timestamp', 'close'], header=None)
+    if not os.path.exists(TRADES_PATH) or os.stat(TRADES_PATH).st_size == 0:
+        return "⛔ Aún no hay operaciones registradas."
 
+    trades = pd.read_csv(TRADES_PATH)
     trades['timestamp'] = pd.to_datetime(trades['timestamp'], utc=True, errors='coerce')
-    prices['timestamp'] = pd.to_datetime(prices['timestamp'], utc=True, errors='coerce')
 
     buy_trades = trades[trades['action'] == 'BUY']
     sell_trades = trades[trades['action'] == 'SELL']
 
-    timestamps = prices['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
-    closes = prices['close'].tolist()
+    # Curva de precios reconstruida desde las operaciones
+    timestamps = trades['timestamp'].dt.strftime('%Y-%m-%d %H:%M:%S').tolist()
+    closes = trades['price'].tolist()
 
     buy_signals = [{'x': ts.strftime('%Y-%m-%d %H:%M:%S'), 'y': price} for ts, price in zip(buy_trades['timestamp'], buy_trades['price'])]
     sell_signals = [{'x': ts.strftime('%Y-%m-%d %H:%M:%S'), 'y': price} for ts, price in zip(sell_trades['timestamp'], sell_trades['price'])]
@@ -100,13 +99,11 @@ def download_report():
     if os.path.exists(REPORT_PATH):
         return send_file(REPORT_PATH, as_attachment=True)
     return "No se ha generado el informe aún.", 404
-  
+
 @app.route("/balance")
 def show_balance():
     from src.balance_tracker import load_balance
     return jsonify(load_balance())
 
-
 if __name__ == '__main__':
     app.run(host='0.0.0.0', port=5001, debug=True)
-
