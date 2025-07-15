@@ -15,7 +15,7 @@ def send_trade_email(action, price, quantity, strategy, symbol):
     msg["To"] = os.getenv("ALERT_EMAIL_TO")
 
     msg.set_content(f"""
-🔔 Trade ejecutado
+Trade ejecutado
 -------------------------
 Acción: {action}
 Cantidad: {quantity} BTC
@@ -37,7 +37,7 @@ def send_trade_telegram(action, price, quantity, strategy, symbol):
     token = os.getenv("TELEGRAM_BOT_TOKEN")
     chat_id = os.getenv("TELEGRAM_CHAT_ID")
     text = f"""
-🔔 *Trade ejecutado*
+*Trade ejecutado*
 *Acción:* {action}
 *Cantidad:* {quantity} BTC
 *Precio:* {price:.2f}
