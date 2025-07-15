@@ -8,6 +8,7 @@ module.exports = {
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
+	PYTHONPATH: '/home/ubuntu/quant-bot'
       }
     },
     {
@@ -18,6 +19,7 @@ module.exports = {
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
+	PYTHONPATH: '/home/ubuntu/quant-bot'
       }
     },
     {
@@ -29,6 +31,7 @@ module.exports = {
       env: {
         FLASK_ENV: 'development',
         PYTHONUNBUFFERED: '1',
+	PYTHONPATH: '/home/ubuntu/quant-bot'
       }
     }
   ]
