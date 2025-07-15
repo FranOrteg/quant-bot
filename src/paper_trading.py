@@ -54,7 +54,7 @@ def buy(symbol, price, strategy_name, params):
     print(f"🟢 COMPRANDO a {slippage_price:.2f} (+slippage), fee: {fee:.4f} USDC")
 
     log_operation(symbol, "BUY", slippage_price, strategy_name, params, trades_path)
-    update_balance("BUY", quantity, slippage_price + (slippage_price * FEE_RATE), perf_path)
+    update_balance("BUY", quantity, slippage_price + (slippage_price * FEE_RATE))
     
     # Enviar notificación por email y Telegram
     send_trade_email("BUY", slippage_price, quantity, strategy_name, symbol)
@@ -79,7 +79,7 @@ def sell(symbol, price, strategy_name, params):
     print(f"🔴 VENDIENDO a {slippage_price:.2f} (-slippage), fee: {fee:.4f} USDC")
 
     log_operation(symbol, "SELL", slippage_price, strategy_name, params, trades_path)
-    update_balance("SELL", quantity, slippage_price - (slippage_price * FEE_RATE), perf_path)
+    update_balance("SELL", quantity, slippage_price - (slippage_price * FEE_RATE))
     
     send_trade_email("SELL", slippage_price, quantity, strategy_name, symbol)
     send_trade_telegram("SELL", slippage_price, quantity, strategy_name, symbol)
