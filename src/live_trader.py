@@ -7,6 +7,7 @@ from src.binance_api import get_historical_data
 from src.paper_trading import buy, sell
 from src.strategy_selector import select_best_strategy
 from src.utils import log_operation
+from src.balance_tracker import load_balance
 
 load_dotenv()
 
@@ -45,6 +46,9 @@ def fetch_historical_prices():
     return strategy_func(df, **params)
 
 def run_bot():
+    print("🔄 Iniciando bot y cargando balance...")
+    balance = load_balance()  # <- Fuerza la carga del balance al arrancar
+    print(f"📊 Balance inicial: {balance}")
     position = 0
     while True:
         start_time = time.time()
