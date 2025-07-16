@@ -58,3 +58,8 @@ def update_balance(action, quantity, price):
             balance["USDC"] += quantity * price
     save_balance(balance)
     log_performance(action, price, balance)
+    print_balance(balance)
+    
+def print_balance(balance):
+    print(f"💰 Balance actual: {balance}")
+
