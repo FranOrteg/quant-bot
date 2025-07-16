@@ -9,6 +9,7 @@ module.exports = {
       env: {
         PYTHONUNBUFFERED: '1',
 	      PYTHONPATH: '/home/ubuntu/quant-bot',
+        USE_REAL_TRADING: 'True',
         USE_REAL_BALANCE: 'True'
       }
     },
