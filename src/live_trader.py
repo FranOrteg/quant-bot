@@ -4,7 +4,10 @@ from dotenv import load_dotenv
 import pandas as pd
 from datetime import datetime, timezone
 from src.binance_api import get_historical_data
-from src.paper_trading import buy, sell
+if os.getenv("USE_REAL_TRADING", "False") == "True":
+    from src.real_trading import buy, sell
+else:
+    from src.paper_trading import buy, sell
 from src.strategy_selector import select_best_strategy
 from src.utils import log_operation
 from src.balance_tracker import load_balance
