@@ -2,18 +2,11 @@
 
 import os
 import json
+from binance.client import Client
 from dotenv import load_dotenv
 from src.utils import log_performance
 
-from binance.client import Client
-
-# Carga variables de entorno
 load_dotenv()
-api_key = os.getenv("BINANCE_API_KEY")
-api_secret = os.getenv("BINANCE_API_SECRET")
-use_real_balance = os.getenv("USE_REAL_BALANCE", "False") == "True"
-
-client = Client(api_key, api_secret)
 
 BALANCE_FILE = 'logs/balance.json'
 DEFAULT_BALANCE = {
@@ -21,23 +14,28 @@ DEFAULT_BALANCE = {
     "BTC": 0.0
 }
 
+USE_REAL_BALANCE = os.getenv("USE_REAL_BALANCE", "False") == "True"
+print(f"🔍 USE_REAL_BALANCE: {USE_REAL_BALANCE}")
+
+def fetch_binance_balance():
+    api_key = os.getenv("BINANCE_API_KEY")
+    api_secret = os.getenv("BINANCE_API_SECRET")
+    client = Client(api_key, api_secret)
+    account_info = client.get_account()
+    usdt = btc = 0.0
+    for asset in account_info['balances']:
+        if asset['asset'] == 'USDC':
+            usdt = float(asset['free'])  # Asumimos operativa con USDC
+        elif asset['asset'] == 'BTC':
+            btc = float(asset['free'])
+    return {"USDT": usdt, "BTC": btc}
+
 def load_balance():
-    if use_real_balance:
-        try:
-            usdc_balance = float(client.get_asset_balance(asset='USDC')["free"])
-            btc_balance = float(client.get_asset_balance(asset='BTC')["free"])
-            balance = {
-                "USDT": usdc_balance,  # o cambia la clave a "USDC" si tu sistema lo espera así
-                "BTC": btc_balance
-            }
-            print("✅ Balance real cargado desde Binance:", balance)
-            save_balance(balance)
-            return balance
-        except Exception as e:
-            print("❌ Error al obtener balance real:", e)
-            print("⚠️ Se usará balance simulado.")
-    
-    # Balance simulado (modo testing / sin conexión Binance)
+    if USE_REAL_BALANCE:
+        balance = fetch_binance_balance()
+        save_balance(balance)
+        print(f"✅ Balance real cargado desde Binance: {balance}")
+        return balance
     if not os.path.exists(BALANCE_FILE):
         save_balance(DEFAULT_BALANCE)
     with open(BALANCE_FILE, 'r') as f:
