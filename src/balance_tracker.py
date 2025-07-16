@@ -10,7 +10,7 @@ load_dotenv()
 
 BALANCE_FILE = 'logs/balance.json'
 DEFAULT_BALANCE = {
-    "USDT": 10000.0,
+    "USDC": 10000.0,
     "BTC": 0.0
 }
 
@@ -22,13 +22,13 @@ def fetch_binance_balance():
     api_secret = os.getenv("BINANCE_API_SECRET")
     client = Client(api_key, api_secret)
     account_info = client.get_account()
-    usdt = btc = 0.0
+    usdc = btc = 0.0
     for asset in account_info['balances']:
         if asset['asset'] == 'USDC':
-            usdt = float(asset['free'])  # Asumimos operativa con USDC
+            usdc = float(asset['free'])  # Asumimos operativa con USDC
         elif asset['asset'] == 'BTC':
             btc = float(asset['free'])
-    return {"USDT": usdt, "BTC": btc}
+    return {"USDC": usdc, "BTC": btc}
 
 def load_balance():
     if USE_REAL_BALANCE:
@@ -49,12 +49,12 @@ def update_balance(action, quantity, price):
     balance = load_balance()
     if action == "BUY":
         cost = quantity * price
-        if balance["USDT"] >= cost:
-            balance["USDT"] -= cost
+        if balance["USDC"] >= cost:
+            balance["USDC"] -= cost
             balance["BTC"] += quantity
     elif action == "SELL":
         if balance["BTC"] >= quantity:
             balance["BTC"] -= quantity
-            balance["USDT"] += quantity * price
+            balance["USDC"] += quantity * price
     save_balance(balance)
     log_performance(action, price, balance)
