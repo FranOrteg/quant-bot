@@ -24,6 +24,11 @@ mult   = int(TIMEFRAME[:-1])
 INTERVAL = mult * (60 if unit == "m" else 3600)
 # ----------------------------------------------------------------------
 
+# === rutas de logs coherentes ===
+SUFFIX = "_15m"
+TRADES_PATH = f"logs/trades{SUFFIX}.csv"
+PERF_PATH   = f"logs/performance_log{SUFFIX}.csv"
+
 # historial inicial
 history = get_historical_data(SYMBOL, TIMEFRAME, BOOT_LIMIT).to_dict("records")
 
@@ -32,7 +37,7 @@ strategy_name, strategy_func, params, _ = select_best_strategy(tf=TIMEFRAME)
 logging.basicConfig(filename="logs/live_trader.log",
                     level=logging.INFO,
                     format="%(asctime)s [%(levelname)s] %(message)s")
-logging.info(f"🧠 Estrategia {strategy_name}   TF={TIMEFRAME}   params={params}")
+logging.info(f"🧐 Estrategia {strategy_name}   TF={TIMEFRAME}   params={params}")
 
 def save_to_csv(row, filename=f"data/{SYMBOL}_{TIMEFRAME}.csv"):
     os.makedirs("data", exist_ok=True)
@@ -67,12 +72,12 @@ def run_bot():
 
         if last.position == 1 and position == 0:
             logging.info("🟢 Señal de COMPRA detectada")
-            buy(SYMBOL, last.close, strategy_name, params)
+            buy(SYMBOL, last.close, strategy_name, params, TRADES_PATH, PERF_PATH)
             position = 1
 
         elif last.position == -1 and position == 1:
             logging.info("🔴 Señal de VENTA detectada")
-            sell(SYMBOL, last.close, strategy_name, params)
+            sell(SYMBOL, last.close, strategy_name, params, TRADES_PATH, PERF_PATH)
             position = 0
 
         # Sincronización precisa con el reloj

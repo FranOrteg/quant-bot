@@ -1,12 +1,12 @@
 # src/paper_trading.py
 
 import os
-import inspect
 from binance.client import Client
 from dotenv import load_dotenv
 from src.utils import log_operation
 from src.balance_tracker import update_balance
 from src.alert import send_trade_email, send_trade_telegram
+import pandas as pd
 
 load_dotenv()
 
@@ -27,13 +27,6 @@ quantity = 0.0002
 FEE_RATE = 0.001
 SLIPPAGE = 0.0005
 
-# === NUEVO: detectar sufijo de script (ej. "5m" si se ejecuta desde live_trader_5m.py) ===
-caller_file = os.path.basename(inspect.stack()[-1].filename)
-suffix = "_5m" if "5m" in caller_file else "_15m"
-
-# === rutas diferenciadas ===
-trades_path = f"logs/trades{suffix}.csv"
-perf_path   = f"logs/performance_log{suffix}.csv"
 symbol = os.getenv("TRADING_SYMBOL", "BTCUSDC")
 
 def get_price(symbol=symbol):
@@ -43,7 +36,7 @@ def get_price(symbol=symbol):
     ticker = client.get_symbol_ticker(symbol=symbol)
     return float(ticker['price'])
 
-def buy(symbol, price, strategy_name, params):
+def buy(symbol, price, strategy_name, params, trades_path, perf_path):
     if client is None:
         print("⛔ No se puede ejecutar COMPRA: Binance no disponible")
         return None
@@ -59,6 +52,9 @@ def buy(symbol, price, strategy_name, params):
     # Enviar notificación por email y Telegram
     send_trade_email("BUY", slippage_price, quantity, strategy_name, symbol)
     send_trade_telegram("BUY", slippage_price, quantity, strategy_name, symbol)
+    
+    with open(perf_path, "a") as f:
+        f.write(f"{pd.Timestamp.utcnow().isoformat()},BUY,{slippage_price},{quantity},{slippage_price * quantity},SUCCESS\n")
 
     return {
         "symbol": symbol,
@@ -68,7 +64,7 @@ def buy(symbol, price, strategy_name, params):
         "price": slippage_price
     }
 
-def sell(symbol, price, strategy_name, params):
+def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     if client is None:
         print("⛔ No se puede ejecutar VENTA: Binance no disponible")
         return None
@@ -83,6 +79,9 @@ def sell(symbol, price, strategy_name, params):
     
     send_trade_email("SELL", slippage_price, quantity, strategy_name, symbol)
     send_trade_telegram("SELL", slippage_price, quantity, strategy_name, symbol)
+    
+    with open(perf_path, "a") as f:
+        f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{slippage_price},{quantity},{slippage_price * quantity},SUCCESS\n")
 
     return {
         "symbol": symbol,
