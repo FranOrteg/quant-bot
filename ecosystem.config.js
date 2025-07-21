@@ -35,6 +35,16 @@ module.exports = {
         PYTHONUNBUFFERED: '1',
 	      PYTHONPATH: '/home/ubuntu/quant-bot',
       }
+    },
+    {
+      name: 'quant-bot-5m',
+      script: '.venv/bin/python',
+      args: '-m src.live_trader_5m',
+      cwd: '/home/ubuntu/quant-bot',
+      interpreter: 'none',
+      env: {
+        PYTHONUNBUFFERED: '1',
+      }
     }
   ]
 }
