@@ -25,16 +25,15 @@ def fetch_binance_balance():
     usdc = btc = 0.0
     for asset in account_info['balances']:
         if asset['asset'] == 'USDC':
-            usdc = float(asset['free'])  # Asumimos operativa con USDC
+            usdc = round(float(asset['free']), 2)
         elif asset['asset'] == 'BTC':
-            btc = float(asset['free'])
+            btc = round(float(asset['free']), 8)
     return {"USDC": usdc, "BTC": btc}
 
 def load_balance():
     if USE_REAL_BALANCE:
         balance = fetch_binance_balance()
-        save_balance(balance)
-        print(f"✅ Balance real cargado desde Binance: {balance}")
+        print(f"✅ Balance real desde Binance: {balance}")
         return balance
     if not os.path.exists(BALANCE_FILE):
         save_balance(DEFAULT_BALANCE)
@@ -46,6 +45,9 @@ def save_balance(balance):
         json.dump(balance, f, indent=2)
 
 def update_balance(action, quantity, price):
+    if USE_REAL_BALANCE:
+        # No actualizar nada, se consulta directamente de Binance
+        return
     balance = load_balance()
     if action == "BUY":
         cost = quantity * price
@@ -59,7 +61,6 @@ def update_balance(action, quantity, price):
     save_balance(balance)
     log_performance(action, price, balance)
     print_balance(balance)
-    
+
 def print_balance(balance):
     print(f"💰 Balance actual: {balance}")
-
