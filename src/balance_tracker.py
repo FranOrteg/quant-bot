@@ -41,6 +41,7 @@ def load_balance():
         return json.load(f)
 
 def save_balance(balance):
+    os.makedirs(os.path.dirname(BALANCE_FILE), exist_ok=True)
     with open(BALANCE_FILE, 'w') as f:
         json.dump(balance, f, indent=2)
 
