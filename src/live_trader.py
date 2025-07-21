@@ -10,7 +10,7 @@ else:
     from src.paper_trading import buy, sell
 from src.strategy_selector import select_best_strategy
 from src.utils import log_operation
-from src.balance_tracker import load_balance
+from src.balance_tracker import load_balance, save_balance
 
 load_dotenv()
 
@@ -57,6 +57,7 @@ def run_bot():
     print("🔄 Iniciando bot y cargando balance...")
     balance = load_balance()  # <- Fuerza la carga del balance al arrancar
     print(f"📊 Balance inicial: {balance}")
+    save_balance(balance)  # <- Guarda el balance inicial
     position = 0
     while True:
         start_time = time.time()
