@@ -16,17 +16,17 @@ def optimize_multi_indicator_strategy():
     print("🔄 Obteniendo datos históricos...")
     df = get_historical_data(symbol='BTC/USDT', timeframe='1h', limit=1000)
     
-    # Parámetros a optimizar
+    # Reducir parámetros para optimización más rápida
     param_ranges = {
-        'macd_short': [8, 12, 16],
-        'macd_long': [21, 26, 30],
-        'macd_signal': [5, 9, 12],
-        'rsi_period': [10, 14, 18],
-        'rsi_oversold': [25, 30, 35],
-        'rsi_overbought': [65, 70, 75],
-        'bb_period': [15, 20, 25],
-        'bb_std': [1.8, 2.0, 2.2],
-        'volume_threshold': [1.0, 1.2, 1.5]
+        'macd_short': [10, 12],
+        'macd_long': [24, 26],
+        'macd_signal': [7, 9],
+        'rsi_period': [14, 16],
+        'rsi_oversold': [25, 30],
+        'rsi_overbought': [70, 75],
+        'bb_period': [18, 20],
+        'bb_std': [1.8, 2.0],
+        'volume_threshold': [1.0, 1.2]
     }
     
     results = []

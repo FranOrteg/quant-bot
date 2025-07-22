@@ -189,10 +189,17 @@ def enhanced_backtest_with_risk_management(df, initial_capital=10000, timeframe=
     
     # Métricas adicionales
     trades_df = pd.DataFrame(trades_log)
-    win_rate = len(trades_df[trades_df['pnl'] > 0]) / len(trades_df) if len(trades_df) > 0 else 0
-    avg_win = trades_df[trades_df['pnl'] > 0]['pnl'].mean() if len(trades_df[trades_df['pnl'] > 0]) > 0 else 0
-    avg_loss = trades_df[trades_df['pnl'] < 0]['pnl'].mean() if len(trades_df[trades_df['pnl'] < 0]) > 0 else 0
-    profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else 0
+    
+    if len(trades_df) > 0:
+        win_rate = len(trades_df[trades_df['pnl'] > 0]) / len(trades_df)
+        avg_win = trades_df[trades_df['pnl'] > 0]['pnl'].mean() if len(trades_df[trades_df['pnl'] > 0]) > 0 else 0
+        avg_loss = trades_df[trades_df['pnl'] < 0]['pnl'].mean() if len(trades_df[trades_df['pnl'] < 0]) > 0 else 0
+        profit_factor = abs(avg_win / avg_loss) if avg_loss != 0 else float('inf') if avg_win > 0 else 0
+    else:
+        win_rate = 0
+        avg_win = 0
+        avg_loss = 0
+        profit_factor = 0
     
     metrics = {
         'total_return': total_return,

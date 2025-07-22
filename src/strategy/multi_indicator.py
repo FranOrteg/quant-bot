@@ -53,34 +53,51 @@ def multi_indicator_strategy(df,
     
     # Signal Generation
     df['position'] = 0
+    df['signal_strength'] = 0.0
     
-    # Buy signals (todas las condiciones deben cumplirse)
+    # Ensure we have enough data
+    if len(df) < max(bb_period, rsi_period, volume_ma_period) + 1:
+        return df
+    
+    # Buy signals (estrategia menos restrictiva)
     buy_conditions = (
         (df['MACD'] > df['MACD_signal']) &  # MACD bullish
         (df['RSI'] < rsi_overbought) &      # No sobrecomprado
-        (df['BB_position'] < 0.3) &         # Cerca del límite inferior BB
-        (df['volume_ratio'] > volume_threshold) &  # Volumen alto
-        (df['MACD_histogram'] > df['MACD_histogram'].shift(1))  # MACD histogram creciendo
+        (
+            # Al menos UNA de estas condiciones debe cumplirse:
+            (df['BB_position'] < 0.5) |     # Precio en mitad inferior de BB
+            (df['volume_ratio'] > volume_threshold) |  # Volumen alto
+            (df['MACD_histogram'] > df['MACD_histogram'].shift(1))  # MACD creciendo
+        ) &
+        (df['MACD'].notna()) &              # Asegurar datos válidos
+        (df['RSI'].notna()) &
+        (df['BB_position'].notna()) &
+        (df['volume_ratio'].notna())
     )
     
     # Sell signals
     sell_conditions = (
         (df['MACD'] < df['MACD_signal']) &  # MACD bearish
         (df['RSI'] > rsi_oversold) &        # No sobrevendido
-        (df['BB_position'] > 0.7)           # Cerca del límite superior BB
+        (df['BB_position'] > 0.7) &         # Cerca del límite superior BB
+        (df['MACD'].notna()) &              # Asegurar datos válidos
+        (df['RSI'].notna()) &
+        (df['BB_position'].notna())
     )
     
+    # Apply signals only where conditions are met
     df.loc[buy_conditions, 'position'] = 1
     df.loc[sell_conditions, 'position'] = -1
     
     # Añadir señales de confianza
-    df['signal_strength'] = 0
-    df.loc[buy_conditions, 'signal_strength'] = (
-        abs(df['MACD'] - df['MACD_signal']) * 0.3 +
-        (rsi_overbought - df['RSI']) * 0.3 +
-        (0.3 - df['BB_position']) * 0.2 +
-        (df['volume_ratio'] - volume_threshold) * 0.2
-    )[buy_conditions]
+    if buy_conditions.any():
+        signal_strength_values = (
+            abs(df.loc[buy_conditions, 'MACD'] - df.loc[buy_conditions, 'MACD_signal']) * 0.3 +
+            (rsi_overbought - df.loc[buy_conditions, 'RSI']) * 0.3 +
+            (0.3 - df.loc[buy_conditions, 'BB_position']) * 0.2 +
+            (df.loc[buy_conditions, 'volume_ratio'] - volume_threshold) * 0.2
+        )
+        df.loc[buy_conditions, 'signal_strength'] = signal_strength_values
     
     return df
 
