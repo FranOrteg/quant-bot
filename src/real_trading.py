@@ -42,30 +42,31 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
 
 def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
-        # ✅ Comprobación de balance disponible (BTC free)
+        # ✅ Comprobar balance real disponible
         balance_info = client.get_asset_balance(asset="BTC")
         free_btc = float(balance_info["free"])
-        min_qty = quantity
-        margin = 0.000001  # Seguridad por redondeo
 
-        if free_btc < (min_qty + margin):
-            print(f"❌ Saldo insuficiente para vender: tienes {free_btc} BTC, necesitas al menos {min_qty}")
+        # ⚠️ Binance no permite órdenes menores a ~0.0001 BTC
+        quantity_to_sell = round(free_btc, 6)
+
+        if quantity_to_sell < 0.0001:
+            print(f"❌ Saldo insuficiente para vender: tienes {free_btc} BTC")
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_FAILED,{price},{free_btc},0,ERROR_INSUFFICIENT_BALANCE\n")
             return None
 
-        # ✅ Orden de venta real
-        order = client.order_market_sell(symbol=symbol, quantity=quantity)
+        # ✅ Ejecutar orden
+        order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
         fill = order["fills"][0]
         real_price = float(fill["price"])
-        fee = real_price * quantity * FEE_RATE
+        fee = real_price * quantity_to_sell * FEE_RATE
 
-        print(f"🔴 ORDEN REAL DE VENTA ejecutada a {real_price:.2f} USDC (fee aprox: {fee:.4f})")
+        print(f"🔴 ORDEN REAL DE VENTA ejecutada a {real_price:.2f} USDC (qty: {quantity_to_sell}, fee aprox: {fee:.4f})")
 
         log_operation(symbol, "SELL", real_price, strategy_name, params, trades_path)
-        update_balance("SELL", quantity, real_price - fee)
-        send_trade_email("SELL", real_price, quantity, strategy_name, symbol)
-        send_trade_telegram("SELL", real_price, quantity, strategy_name, symbol)
+        update_balance("SELL", quantity_to_sell, real_price - fee)
+        send_trade_email("SELL", real_price, quantity_to_sell, strategy_name, symbol)
+        send_trade_telegram("SELL", real_price, quantity_to_sell, strategy_name, symbol)
 
         return order
 
