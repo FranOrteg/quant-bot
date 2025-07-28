@@ -5,7 +5,7 @@ from src.utils import log_performance
 
 BALANCE_FILE = 'logs/balance_5m.json'
 DEFAULT_BALANCE = {
-    "USDT": 10000.0,
+    "USDC": 10000.0,
     "BTC": 0.0
 }
 
@@ -23,12 +23,12 @@ def update_balance(action, quantity, price):
     balance = load_balance()
     if action == "BUY":
         cost = quantity * price
-        if balance["USDT"] >= cost:
-            balance["USDT"] -= cost
+        if balance["USDC"] >= cost:
+            balance["USDC"] -= cost
             balance["BTC"] += quantity
     elif action == "SELL":
         if balance["BTC"] >= quantity:
             balance["BTC"] -= quantity
-            balance["USDT"] += quantity * price
+            balance["USDC"] += quantity * price
     save_balance(balance)
     log_performance(action, price, balance, filename="logs/performance_log_5m.csv")
