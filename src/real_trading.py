@@ -6,6 +6,7 @@ from dotenv import load_dotenv
 from src.utils import log_operation
 from src.balance_tracker import update_balance
 from src.alert import send_trade_email, send_trade_telegram
+from decimal import Decimal, ROUND_DOWN
 import pandas as pd
 
 load_dotenv()
@@ -47,7 +48,8 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
         free_btc = float(balance_info["free"])
 
         # ⚠️ Binance no permite órdenes menores a ~0.0001 BTC
-        quantity_to_sell = round(free_btc, 6)
+        # Redondeamos hacia abajo para evitar vender más del saldo libre tras las comisiones
+        quantity_to_sell = float(Decimal(str(free_btc)).quantize(Decimal('0.000001'), rounding=ROUND_DOWN))
 
         if quantity_to_sell < 0.0001:
             print(f"❌ Saldo insuficiente para vender: tienes {free_btc} BTC")
