@@ -53,7 +53,7 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
 
         # ⚠️ Binance LOT_SIZE exige exactamente 5 decimales (ej: 0.00020)
         quantity_to_sell = float(
-            Decimal(qty_with_margin).quantize(Decimal('0.00001'), rounding=ROUND_DOWN)
+            Decimal(qty_with_margin).quantize(Decimal('0.000001'), rounding=ROUND_DOWN)
         )
 
         # ⚠️ Verificar tamaño mínimo de orden para Binance (0.00001 BTC)
