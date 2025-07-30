@@ -54,6 +54,10 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
             return None
 
         print(f"🔴 Ejecutando venta de {quantity_to_sell:.6f} BTC…")
+        # Verificación de múltiplo exacto (debug)
+        step_size = Decimal(client.get_symbol_info(symbol)["filters"][2]["stepSize"])
+        assert Decimal(str(quantity_to_sell)) % step_size == 0, "❌ La cantidad NO es múltiplo de stepSize"
+
         order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
 
         fill        = order["fills"][0]

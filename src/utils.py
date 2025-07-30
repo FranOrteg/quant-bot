@@ -60,8 +60,6 @@ def convert_params(params):
 
 
 def get_sellable_quantity(symbol: str, client: Client) -> float:
-    from decimal import Decimal, ROUND_DOWN
-
     info        = client.get_asset_balance(asset="BTC")
     free_btc    = Decimal(info["free"])
 
@@ -70,11 +68,11 @@ def get_sellable_quantity(symbol: str, client: Client) -> float:
     step_size   = Decimal(lot_filter["stepSize"])
     min_qty     = Decimal(lot_filter["minQty"])
 
-    # 🔍 Número de pasos enteros que caben en el balance
-    steps = (free_btc / step_size).to_integral_value(rounding=ROUND_DOWN)
-    qty   = steps * step_size
+    # 🔍 Truncar a múltiplo exacto de stepSize (¡no usar round!)
+    qty = (free_btc // step_size) * step_size
 
     if qty < min_qty:
         return 0.0
 
     return float(qty)
+
