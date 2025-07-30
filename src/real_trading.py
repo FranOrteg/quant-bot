@@ -43,32 +43,45 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
 
 def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
-        # ✅ Comprobar balance real disponible
+        # ✅ Obtener balance real disponible
         balance_info = client.get_asset_balance(asset="BTC")
         free_btc = float(balance_info["free"])
 
-        # ⚠️ Binance no permite órdenes menores a ~0.0001 BTC
-        # Redondeamos hacia abajo para evitar vender más del saldo libre tras las comisiones
-        quantity_to_sell = float(Decimal(str(free_btc)).quantize(Decimal('0.000001'), rounding=ROUND_DOWN))
+        # 📌 Aplicar margen de seguridad del 0.5% para fees
+        safety_margin = 0.995
+        qty_with_margin = free_btc * safety_margin
 
-        if quantity_to_sell < 0.0001:
-            print(f"❌ Saldo insuficiente para vender: tienes {free_btc} BTC")
+        # ⚠️ Binance LOT_SIZE exige exactamente 5 decimales (ej: 0.00020)
+        quantity_to_sell = float(
+            Decimal(qty_with_margin).quantize(Decimal('0.000001'), rounding=ROUND_DOWN)
+        )
+
+        # ⚠️ Verificar tamaño mínimo de orden para Binance (0.00001 BTC)
+        min_lot_size = 0.00001
+        if quantity_to_sell < min_lot_size:
+            print(f"❌ Saldo insuficiente para vender: tienes {free_btc:.8f} BTC")
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_FAILED,{price},{free_btc},0,ERROR_INSUFFICIENT_BALANCE\n")
             return None
 
-        # ✅ Ejecutar orden
+        print(f"🔴 Intentando vender {quantity_to_sell:.5f} BTC (de {free_btc:.8f} disponibles)...")
+
+        # ✅ Ejecutar orden real
         order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
         fill = order["fills"][0]
         real_price = float(fill["price"])
-        fee = real_price * quantity_to_sell * FEE_RATE
+        executed_qty = float(fill["qty"])
+        fee = real_price * executed_qty * FEE_RATE
 
-        print(f"🔴 ORDEN REAL DE VENTA ejecutada a {real_price:.2f} USDC (qty: {quantity_to_sell}, fee aprox: {fee:.4f})")
+        print(f"✅ Venta REAL ejecutada a {real_price:.2f} USDC (qty: {executed_qty}, fee: {fee:.4f} USDT)")
 
         log_operation(symbol, "SELL", real_price, strategy_name, params, trades_path)
-        update_balance("SELL", quantity_to_sell, real_price - fee)
-        send_trade_email("SELL", real_price, quantity_to_sell, strategy_name, symbol)
-        send_trade_telegram("SELL", real_price, quantity_to_sell, strategy_name, symbol)
+        update_balance("SELL", executed_qty, real_price - fee)
+        send_trade_email("SELL", real_price, executed_qty, strategy_name, symbol)
+        send_trade_telegram("SELL", real_price, executed_qty, strategy_name, symbol)
+
+        with open(perf_path, "a") as f:
+            f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{executed_qty},{real_price * executed_qty},SUCCESS\n")
 
         return order
 
