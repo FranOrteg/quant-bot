@@ -1,5 +1,3 @@
-# src/real_trading.py
-
 import os
 from binance.client import Client
 from dotenv import load_dotenv
@@ -11,13 +9,13 @@ import pandas as pd
 
 load_dotenv()
 
-api_key = os.getenv("BINANCE_API_KEY")
+api_key    = os.getenv("BINANCE_API_KEY")
 api_secret = os.getenv("BINANCE_API_SECRET")
-client = Client(api_key, api_secret)
+client     = Client(api_key, api_secret)
 
-quantity = 0.0002  # cantidad fija de prueba
-symbol = os.getenv("TRADING_SYMBOL", "BTCUSDC")
-FEE_RATE = 0.001
+quantity   = 0.0002  # cantidad de prueba
+symbol     = os.getenv("TRADING_SYMBOL", "BTCUSDC")
+FEE_RATE   = 0.001
 
 def buy(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
@@ -25,7 +23,7 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
         fill = order["fills"][0]
         real_price = float(fill["price"])
         fee = real_price * quantity * FEE_RATE
-        
+
         with open(perf_path, "a") as f:
             f.write(f"{pd.Timestamp.utcnow().isoformat()},BUY,{real_price},{quantity},{real_price * quantity},SUCCESS\n")
 
@@ -43,34 +41,35 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
 
 def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
-        # 🔍 Obtener cantidad exacta vendible según filtros Binance
-        quantity_to_sell = get_sellable_quantity(symbol, client)
+        qty_decimal = get_sellable_quantity(symbol, client)
 
-        if quantity_to_sell == 0.0:
+        if qty_decimal == Decimal("0.0"):
             free_btc = client.get_asset_balance(asset="BTC")["free"]
             print(f"❌ Saldo ({free_btc} BTC) menor que minQty permitido")
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_SKIPPED,{price},{free_btc},0,BELOW_MIN_QTY\n")
             return None
 
-        print(f"🔴 Ejecutando venta de {quantity_to_sell:.6f} BTC…")
-        # Verificación de múltiplo exacto (debug)
-        step_size = Decimal(client.get_symbol_info(symbol)["filters"][2]["stepSize"])
-        assert Decimal(str(quantity_to_sell)) % step_size == 0, "❌ La cantidad NO es múltiplo de stepSize"
+        print(f"🔴 Ejecutando venta de {qty_decimal} BTC…")
 
-        order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
+        # DEBUG: confirmar múltiplo exacto
+        symbol_info = client.get_symbol_info(symbol)
+        step_size = Decimal(next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")["stepSize"])
+        assert qty_decimal % step_size == 0, f"❌ {qty_decimal} no es múltiplo exacto de {step_size}"
 
-        fill        = order["fills"][0]
-        real_price  = float(fill["price"])
-        fee         = real_price * quantity_to_sell * FEE_RATE
+        order = client.order_market_sell(symbol=symbol, quantity=float(qty_decimal))
+
+        fill = order["fills"][0]
+        real_price = float(fill["price"])
+        fee = real_price * float(qty_decimal) * FEE_RATE
 
         log_operation(symbol, "SELL", real_price, strategy_name, params, trades_path)
-        update_balance("SELL", quantity_to_sell, real_price - fee)
-        send_trade_email("SELL", real_price, quantity_to_sell, strategy_name, symbol)
-        send_trade_telegram("SELL", real_price, quantity_to_sell, strategy_name, symbol)
+        update_balance("SELL", float(qty_decimal), real_price - fee)
+        send_trade_email("SELL", real_price, float(qty_decimal), strategy_name, symbol)
+        send_trade_telegram("SELL", real_price, float(qty_decimal), strategy_name, symbol)
 
         with open(perf_path, "a") as f:
-            f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{quantity_to_sell},{real_price*quantity_to_sell},SUCCESS\n")
+            f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{float(qty_decimal)},{real_price*float(qty_decimal)},SUCCESS\n")
 
         print(f"✅ Venta ejecutada a {real_price:.2f} USDC")
         return order

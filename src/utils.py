@@ -68,11 +68,11 @@ def get_sellable_quantity(symbol: str, client: Client) -> float:
     step_size   = Decimal(lot_filter["stepSize"])
     min_qty     = Decimal(lot_filter["minQty"])
 
-    # 🔍 Truncar a múltiplo exacto de stepSize (¡no usar round!)
+    # 🔍 Truncar a múltiplo exacto de stepSize
     qty = (free_btc // step_size) * step_size
 
     if qty < min_qty:
         return 0.0
 
-    return float(qty)
+    return qty
 
