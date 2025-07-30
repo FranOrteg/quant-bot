@@ -1,7 +1,7 @@
 import os
 from binance.client import Client
 from dotenv import load_dotenv
-from src.utils import log_operation, get_sellable_quantity
+from src.utils import log_operation, get_sellable_quantity, format_quantity_for_binance
 from src.balance_tracker import update_balance
 from src.alert import send_trade_email, send_trade_telegram
 from decimal import Decimal
@@ -9,13 +9,13 @@ import pandas as pd
 
 load_dotenv()
 
-api_key    = os.getenv("BINANCE_API_KEY")
+api_key = os.getenv("BINANCE_API_KEY")
 api_secret = os.getenv("BINANCE_API_SECRET")
-client     = Client(api_key, api_secret)
+client = Client(api_key, api_secret)
 
-quantity   = 0.0002  # cantidad de prueba
-symbol     = os.getenv("TRADING_SYMBOL", "BTCUSDC")
-FEE_RATE   = 0.001
+quantity = 0.0002  # cantidad de prueba
+symbol = os.getenv("TRADING_SYMBOL", "BTCUSDC")
+FEE_RATE = 0.001
 
 def buy(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
@@ -45,16 +45,21 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
 
         if qty_decimal == Decimal("0.0"):
             free_btc = client.get_asset_balance(asset="BTC")["free"]
-            print(f"❌ Saldo ({free_btc} BTC) menor que minQty permitido")
+            print(f"❌ Saldo ({free_btc} BTC) insuficiente o no vendible.")
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_SKIPPED,{price},{free_btc},0,BELOW_MIN_QTY\n")
             return None
         
-        qty_str = format(qty_decimal, ".6f")
+        # Obtener stepSize para formatear la cantidad
+        symbol_info = client.get_symbol_info(symbol)
+        lot_filter = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
+        step_size = Decimal(lot_filter["stepSize"])
+        
+        # Formatear la cantidad como string
+        qty_str = format_quantity_for_binance(qty_decimal, step_size)
         print(f"🔴 Ejecutando venta de {qty_str} BTC…")
         
         order = client.order_market_sell(symbol=symbol, quantity=qty_str)
-
 
         fill = order["fills"][0]
         real_price = float(fill["price"])
