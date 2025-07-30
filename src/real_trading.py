@@ -49,15 +49,12 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_SKIPPED,{price},{free_btc},0,BELOW_MIN_QTY\n")
             return None
+        
+        qty_str = format(qty_decimal, ".6f")
+        print(f"🔴 Ejecutando venta de {qty_str} BTC…")
+        
+        order = client.order_market_sell(symbol=symbol, quantity=qty_str)
 
-        print(f"🔴 Ejecutando venta de {qty_decimal} BTC…")
-
-        # DEBUG: confirmar múltiplo exacto
-        symbol_info = client.get_symbol_info(symbol)
-        step_size = Decimal(next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")["stepSize"])
-        assert qty_decimal % step_size == 0, f"❌ {qty_decimal} no es múltiplo exacto de {step_size}"
-
-        order = client.order_market_sell(symbol=symbol, quantity=float(qty_decimal))
 
         fill = order["fills"][0]
         real_price = float(fill["price"])
