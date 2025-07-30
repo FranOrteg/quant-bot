@@ -3,10 +3,10 @@
 import os
 from binance.client import Client
 from dotenv import load_dotenv
-from src.utils import log_operation, prepare_quantity
+from src.utils import log_operation, get_sellable_quantity
 from src.balance_tracker import update_balance
 from src.alert import send_trade_email, send_trade_telegram
-from decimal import Decimal, ROUND_DOWN
+from decimal import Decimal
 import pandas as pd
 
 load_dotenv()
@@ -15,7 +15,7 @@ api_key = os.getenv("BINANCE_API_KEY")
 api_secret = os.getenv("BINANCE_API_SECRET")
 client = Client(api_key, api_secret)
 
-quantity = 0.0002  # ajusta si es necesario
+quantity = 0.0002  # cantidad fija de prueba
 symbol = os.getenv("TRADING_SYMBOL", "BTCUSDC")
 FEE_RATE = 0.001
 
@@ -43,19 +43,17 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
 
 def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
-        info      = client.get_asset_balance(asset="BTC")
-        free_btc  = float(info["free"])
-
-        symbol_info     = client.get_symbol_info(symbol)
-        quantity_to_sell = prepare_quantity(free_btc, symbol_info)
+        # 🔍 Obtener cantidad exacta vendible según filtros Binance
+        quantity_to_sell = get_sellable_quantity(symbol, client)
 
         if quantity_to_sell == 0.0:
-            print(f"❌ Saldo ({free_btc:.8f}) menor que minQty de Binance")
+            free_btc = client.get_asset_balance(asset="BTC")["free"]
+            print(f"❌ Saldo ({free_btc} BTC) menor que minQty permitido")
             with open(perf_path, "a") as f:
                 f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_SKIPPED,{price},{free_btc},0,BELOW_MIN_QTY\n")
             return None
 
-        print(f"🔴 Vendiendo {quantity_to_sell:.6f} BTC…")
+        print(f"🔴 Ejecutando venta de {quantity_to_sell:.6f} BTC…")
         order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
 
         fill        = order["fills"][0]
@@ -69,6 +67,7 @@ def sell(symbol, price, strategy_name, params, trades_path, perf_path):
 
         with open(perf_path, "a") as f:
             f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{quantity_to_sell},{real_price*quantity_to_sell},SUCCESS\n")
+
         print(f"✅ Venta ejecutada a {real_price:.2f} USDC")
         return order
 

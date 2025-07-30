@@ -3,6 +3,7 @@ import os
 import json
 import pandas as pd
 import numpy as np
+from binance.client import Client
 from datetime import datetime, timezone
 from decimal import Decimal, ROUND_DOWN
 from math import floor
@@ -58,16 +59,22 @@ def convert_params(params):
     return {k: sanitize(v) for k, v in params.items()}
 
 
-def prepare_quantity(free_btc: float, symbol_info: dict) -> float:
-    lot_filter   = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
-    step_size    = Decimal(lot_filter["stepSize"])
-    min_qty      = Decimal(lot_filter["minQty"])
+def get_sellable_quantity(symbol: str, client: Client) -> float:
+    # 1. Leer balance real
+    free_btc = Decimal(client.get_asset_balance(asset="BTC")["free"])
 
-    qty_decimal  = Decimal(str(free_btc)).quantize(step_size, rounding=ROUND_DOWN)
-    # Truncar al múltiplo exacto de stepSize
-    steps        = (qty_decimal / step_size).to_integral_value(rounding=ROUND_DOWN)
-    qty_decimal  = steps * step_size
+    # 2. Leer restricciones del par
+    symbol_info = client.get_symbol_info(symbol)
+    lot_filter  = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
+    step        = Decimal(lot_filter["stepSize"])
+    min_qty     = Decimal(lot_filter["minQty"])
 
-    if qty_decimal < min_qty:
-        return 0.0     # insuficiente
-    return float(qty_decimal)
+    # 3. Redondear hacia abajo a múltiplo exacto de stepSize
+    steps = (free_btc / step).to_integral_value(rounding=ROUND_DOWN)
+    qty   = steps * step
+
+    # 4. Si no cumple minQty, no se puede vender
+    if qty < min_qty:
+        return 0.0
+
+    return float(qty)
