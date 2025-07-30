@@ -4,6 +4,8 @@ import json
 import pandas as pd
 import numpy as np
 from datetime import datetime, timezone
+from decimal import Decimal, ROUND_DOWN
+from math import floor
 
 TRADES_FILE = 'logs/trades.csv'
 PERFORMANCE_FILE = 'logs/performance_log.csv'
@@ -55,3 +57,17 @@ def convert_params(params):
 
     return {k: sanitize(v) for k, v in params.items()}
 
+
+def prepare_quantity(free_btc: float, symbol_info: dict) -> float:
+    lot_filter   = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
+    step_size    = Decimal(lot_filter["stepSize"])
+    min_qty      = Decimal(lot_filter["minQty"])
+
+    qty_decimal  = Decimal(str(free_btc)).quantize(step_size, rounding=ROUND_DOWN)
+    # Truncar al múltiplo exacto de stepSize
+    steps        = (qty_decimal / step_size).to_integral_value(rounding=ROUND_DOWN)
+    qty_decimal  = steps * step_size
+
+    if qty_decimal < min_qty:
+        return 0.0     # insuficiente
+    return float(qty_decimal)

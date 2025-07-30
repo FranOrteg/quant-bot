@@ -3,7 +3,7 @@
 import os
 from binance.client import Client
 from dotenv import load_dotenv
-from src.utils import log_operation
+from src.utils import log_operation, prepare_quantity
 from src.balance_tracker import update_balance
 from src.alert import send_trade_email, send_trade_telegram
 from decimal import Decimal, ROUND_DOWN
@@ -43,50 +43,37 @@ def buy(symbol, price, strategy_name, params, trades_path, perf_path):
 
 def sell(symbol, price, strategy_name, params, trades_path, perf_path):
     try:
-        # ✅ Obtener balance real disponible
-        balance_info = client.get_asset_balance(asset="BTC")
-        free_btc = float(balance_info["free"])
+        info      = client.get_asset_balance(asset="BTC")
+        free_btc  = float(info["free"])
 
-        # 📌 Aplicar margen de seguridad del 0.5% para fees
-        safety_margin = 0.995
-        qty_with_margin = free_btc * safety_margin
+        symbol_info     = client.get_symbol_info(symbol)
+        quantity_to_sell = prepare_quantity(free_btc, symbol_info)
 
-        # ⚠️ Binance LOT_SIZE exige exactamente 5 decimales (ej: 0.00020)
-        quantity_to_sell = float(
-            Decimal(qty_with_margin).quantize(Decimal('0.000001'), rounding=ROUND_DOWN)
-        )
-
-        # ⚠️ Verificar tamaño mínimo de orden para Binance (0.00001 BTC)
-        min_lot_size = 0.00001
-        if quantity_to_sell < min_lot_size:
-            print(f"❌ Saldo insuficiente para vender: tienes {free_btc:.8f} BTC")
+        if quantity_to_sell == 0.0:
+            print(f"❌ Saldo ({free_btc:.8f}) menor que minQty de Binance")
             with open(perf_path, "a") as f:
-                f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_FAILED,{price},{free_btc},0,ERROR_INSUFFICIENT_BALANCE\n")
+                f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_SKIPPED,{price},{free_btc},0,BELOW_MIN_QTY\n")
             return None
 
-        print(f"🔴 Intentando vender {quantity_to_sell:.5f} BTC (de {free_btc:.8f} disponibles)...")
-
-        # ✅ Ejecutar orden real
+        print(f"🔴 Vendiendo {quantity_to_sell:.6f} BTC…")
         order = client.order_market_sell(symbol=symbol, quantity=quantity_to_sell)
-        fill = order["fills"][0]
-        real_price = float(fill["price"])
-        executed_qty = float(fill["qty"])
-        fee = real_price * executed_qty * FEE_RATE
 
-        print(f"✅ Venta REAL ejecutada a {real_price:.2f} USDC (qty: {executed_qty}, fee: {fee:.4f} USDT)")
+        fill        = order["fills"][0]
+        real_price  = float(fill["price"])
+        fee         = real_price * quantity_to_sell * FEE_RATE
 
         log_operation(symbol, "SELL", real_price, strategy_name, params, trades_path)
-        update_balance("SELL", executed_qty, real_price - fee)
-        send_trade_email("SELL", real_price, executed_qty, strategy_name, symbol)
-        send_trade_telegram("SELL", real_price, executed_qty, strategy_name, symbol)
+        update_balance("SELL", quantity_to_sell, real_price - fee)
+        send_trade_email("SELL", real_price, quantity_to_sell, strategy_name, symbol)
+        send_trade_telegram("SELL", real_price, quantity_to_sell, strategy_name, symbol)
 
         with open(perf_path, "a") as f:
-            f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{executed_qty},{real_price * executed_qty},SUCCESS\n")
-
+            f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL,{real_price},{quantity_to_sell},{real_price*quantity_to_sell},SUCCESS\n")
+        print(f"✅ Venta ejecutada a {real_price:.2f} USDC")
         return order
 
     except Exception as e:
-        print(f"❌ Error al ejecutar venta real: {e}")
+        print(f"❌ Error al vender: {e}")
         with open(perf_path, "a") as f:
             f.write(f"{pd.Timestamp.utcnow().isoformat()},SELL_FAILED,{price},-,0,{str(e).replace(',', '')}\n")
         return None
