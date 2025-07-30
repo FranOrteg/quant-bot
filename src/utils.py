@@ -60,20 +60,20 @@ def convert_params(params):
 
 
 def get_sellable_quantity(symbol: str, client: Client) -> float:
-    # 1. Leer balance real
-    free_btc = Decimal(client.get_asset_balance(asset="BTC")["free"])
+    from decimal import Decimal, ROUND_DOWN
 
-    # 2. Leer restricciones del par
+    info        = client.get_asset_balance(asset="BTC")
+    free_btc    = Decimal(info["free"])
+
     symbol_info = client.get_symbol_info(symbol)
     lot_filter  = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
-    step        = Decimal(lot_filter["stepSize"])
+    step_size   = Decimal(lot_filter["stepSize"])
     min_qty     = Decimal(lot_filter["minQty"])
 
-    # 3. Redondear hacia abajo a múltiplo exacto de stepSize
-    steps = (free_btc / step).to_integral_value(rounding=ROUND_DOWN)
-    qty   = steps * step
+    # 🔍 Número de pasos enteros que caben en el balance
+    steps = (free_btc / step_size).to_integral_value(rounding=ROUND_DOWN)
+    qty   = steps * step_size
 
-    # 4. Si no cumple minQty, no se puede vender
     if qty < min_qty:
         return 0.0
 
