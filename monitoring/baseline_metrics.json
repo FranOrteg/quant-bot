@@ -1,0 +1,38 @@
+{
+  "optimization_start": "2025-08-06T13:25:46.631982+00:00",
+  "pre_optimization": {
+    "bot_15m": {
+      "balance_usdc": 55.41,
+      "total_return": -1.07,
+      "win_rate": 50.0,
+      "completed_trades": 2,
+      "strategy": "rsi_sma",
+      "old_params": {
+        "rsi_period": 10,
+        "sma_period": 20,
+        "rsi_buy": 40,
+        "rsi_sell": 60
+      }
+    },
+    "bot_5m": {
+      "balance_usdc": 56.87,
+      "total_return": -1.83,
+      "win_rate": 33.3,
+      "completed_trades": 6,
+      "strategy": "rsi_sma",
+      "old_params": {
+        "rsi_period": 10,
+        "sma_period": 20,
+        "rsi_buy": 40,
+        "rsi_sell": 60
+      }
+    }
+  },
+  "optimized_params": {
+    "rsi_period": 14,
+    "sma_period": 50,
+    "rsi_buy": 25,
+    "rsi_sell": 75,
+    "expected_improvement": "Reducci\u00f3n de whipsaws, mejor calidad de se\u00f1ales"
+  }
+}
