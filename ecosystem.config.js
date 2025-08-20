@@ -49,17 +49,16 @@ module.exports = {
     {
       name: 'reopt-15m',
       script: '.venv/bin/python',
-      args: '-m src.auto_reoptimizer',
+      args: '-m src.reoptimizer',
       cwd: '/home/ubuntu/quant-bot',
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
+        PYTHONPATH: '/home/ubuntu/quant-bot',
         REOPT_SYMBOL: 'BTCUSDC',
         REOPT_TIMEFRAME: '15m',
-        REOPT_LIMIT: '5000',
-        REOPT_EVERY_HOURS: '12',
-        REOPT_MIN_IMPROVEMENT: '0.002',
-        ACTIVE_STALE_HOURS: '48'
+        REOPT_LIMIT: '8000',
+        REOPT_EVERY_MIN: '60'
       }
     }
   ]
