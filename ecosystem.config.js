@@ -8,7 +8,7 @@ module.exports = {
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
-	      PYTHONPATH: '/home/ubuntu/quant-bot',
+        PYTHONPATH: '/home/ubuntu/quant-bot',
         USE_REAL_TRADING: 'True',
         USE_REAL_BALANCE: 'True'
       }
@@ -21,7 +21,7 @@ module.exports = {
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
-	      PYTHONPATH: '/home/ubuntu/quant-bot',
+        PYTHONPATH: '/home/ubuntu/quant-bot',
       }
     },
     {
@@ -33,7 +33,7 @@ module.exports = {
       env: {
         FLASK_ENV: 'development',
         PYTHONUNBUFFERED: '1',
-	      PYTHONPATH: '/home/ubuntu/quant-bot',
+        PYTHONPATH: '/home/ubuntu/quant-bot',
       }
     },
     {
@@ -44,6 +44,22 @@ module.exports = {
       interpreter: 'none',
       env: {
         PYTHONUNBUFFERED: '1',
+      }
+    },
+    {
+      name: 'reopt-15m',
+      script: '.venv/bin/python',
+      args: '-m src.auto_reoptimizer',
+      cwd: '/home/ubuntu/quant-bot',
+      interpreter: 'none',
+      env: {
+        PYTHONUNBUFFERED: '1',
+        REOPT_SYMBOL: 'BTCUSDC',
+        REOPT_TIMEFRAME: '15m',
+        REOPT_LIMIT: '5000',
+        REOPT_EVERY_HOURS: '12',
+        REOPT_MIN_IMPROVEMENT: '0.002',
+        ACTIVE_STALE_HOURS: '48'
       }
     }
   ]
