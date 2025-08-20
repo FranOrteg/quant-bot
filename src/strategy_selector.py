@@ -2,30 +2,21 @@
 """
 Selector de estrategia y parámetros
 - Prioriza parámetros activos desde results/active_params_{SYMBOL}_{TF}.json
-- Si no existen, elige el mejor de results/*_optimization_{TF}.csv
-- Fallback seguro a RSI+SMA con parámetros conservadores
+- Si no existen, elige el mejor set de results/rsi_optimization_{TF}.csv
+- Fallback seguro (RSI+SMA conservador) si no hay nada
 """
 
 import os
 import json
 import pandas as pd
 
-# Importa SOLO lo que existe en tu repo:
-from src.strategy.rsi_sma import rsi_sma as rsi_sma_strategy  # si tu función se llama rsi_sma
-# Si tu función se llama rsi_sma_strategy, descomenta esta línea y comenta la anterior:
-# from src.strategy.rsi_sma import rsi_sma_strategy
-
-# Si usas otras estrategias, descomenta cuando las uses:
-# from src.strategy.macd import macd_strategy
-# from src.strategy.multi_indicator import multi_indicator_strategy
-
+from src.strategy.rsi_sma import rsi_sma_strategy
 
 def _num(x, default=0.0):
     try:
         return float(x)
     except Exception:
         return float(default)
-
 
 def _read_active_params(symbol: str, tf: str):
     """Lee results/active_params_{symbol}_{tf}.json si existe."""
@@ -42,7 +33,6 @@ def _read_active_params(symbol: str, tf: str):
         return dict(strategy=strat, params=params, metrics=metrics, source="ACTIVE_PARAMS_JSON", path=path)
     except Exception:
         return None
-
 
 def _best_from_csv(path: str, strat: str, param_cols):
     """Busca el mejor registro por total_return en un CSV de resultados."""
@@ -62,29 +52,33 @@ def _best_from_csv(path: str, strat: str, param_cols):
         return None
 
     best = df.sort_values("total_return", ascending=False).iloc[0]
-    params = {k: int(best[k]) if str(best[k]).isdigit() else _num(best[k], best[k]) for k in param_cols}
+    params = {}
+    for k in param_cols:
+        v = best[k]
+        try:
+            v_int = int(v)
+            params[k] = v_int
+        except Exception:
+            params[k] = _num(v, v)
+
     metrics = dict(
         total_return=_num(best.get("total_return", 0)),
         sharpe_ratio=_num(best.get("sharpe_ratio", 0)),
-        max_drawdown=_num(best.get("max_drawdown", 0))
+        max_drawdown=_num(best.get("max_drawdown", 0)),
     )
     return dict(strategy=strat, params=params, metrics=metrics, source=path)
 
-
 def select_best_strategy(symbol: str = "BTCUSDC", tf: str = "15m"):
     """
-    Orden de prioridad:
-    1) results/active_params_{symbol}_{tf}.json   (si existe)
-    2) results/rsi_optimization_{tf}.csv          (mejor por total_return)
+    Prioridad:
+    1) results/active_params_{symbol}_{tf}.json
+    2) results/rsi_optimization_{tf}.csv
     3) Fallback conservador
     """
     # 1) Activo
     active = _read_active_params(symbol, tf)
     if active:
-        strategy_name = active["strategy"]
-        if strategy_name != "rsi_sma":
-            # Si en un futuro quieres activar MACD o multi_indicator, añade el mapper debajo
-            strategy_name = "rsi_sma"
+        strategy_name = "rsi_sma"  # solo soportamos esta en el selector por ahora
         mapper = {"rsi_sma": rsi_sma_strategy}
         print("\n🏆 Estrategia seleccionada")
         print("   • Nombre     :", strategy_name)

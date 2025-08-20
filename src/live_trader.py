@@ -15,7 +15,7 @@ from src.strategy_selector import select_best_strategy
 from src.balance_tracker import load_balance, save_balance
 
 # Para hot‑reload de rsi_sma si cambian parámetros activos:
-from src.strategy.rsi_sma import rsi_sma as rsi_sma_strategy  # o rsi_sma_strategy si así se llama en tu repo
+from src.strategy.rsi_sma import rsi_sma_strategy
 
 load_dotenv()
 
