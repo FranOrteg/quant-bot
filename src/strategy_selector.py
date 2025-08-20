@@ -10,7 +10,7 @@ import os
 import json
 import pandas as pd
 
-from src.strategy.rsi_sma import rsi_sma_strategy
+from src.strategy.rsi_sma import rsi_sma_strategy 
 
 def _num(x, default=0.0):
     try:
@@ -56,8 +56,7 @@ def _best_from_csv(path: str, strat: str, param_cols):
     for k in param_cols:
         v = best[k]
         try:
-            v_int = int(v)
-            params[k] = v_int
+            params[k] = int(v)
         except Exception:
             params[k] = _num(v, v)
 
@@ -78,7 +77,8 @@ def select_best_strategy(symbol: str = "BTCUSDC", tf: str = "15m"):
     # 1) Activo
     active = _read_active_params(symbol, tf)
     if active:
-        strategy_name = "rsi_sma"  # solo soportamos esta en el selector por ahora
+        # Por ahora solo soportamos rsi_sma
+        strategy_name = "rsi_sma"
         mapper = {"rsi_sma": rsi_sma_strategy}
         print("\n🏆 Estrategia seleccionada")
         print("   • Nombre     :", strategy_name)
