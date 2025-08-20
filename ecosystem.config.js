@@ -55,11 +55,19 @@ module.exports = {
       env: {
         PYTHONUNBUFFERED: '1',
         PYTHONPATH: '/home/ubuntu/quant-bot',
-        REOPT_SYMBOL: 'BTCUSDC',
-        REOPT_TIMEFRAME: '15m',
-        REOPT_LIMIT: '8000',
-        REOPT_EVERY_MIN: '60'
+
+        // Lo que realmente lee reoptimizer.py:
+        TRADING_SYMBOL: 'BTCUSDC',
+        TRADING_TIMEFRAME: '15m',
+
+        // Frecuencia del loop (en minutos) y stale del CSV (minutos):
+        REOPT_EVERY_MIN: '15',          // cada 15 min
+        REOPT_CSV_STALE_MIN: '60',      // si el CSV tiene ≥60 min, re-optimiza
+
+        // Límite de velas para la optimización:
+        REOPT_LIMIT: '8000'
       }
     }
+
   ]
 }
