@@ -1,5 +1,0 @@
-Operaciones: 2
-Equity final: 10000.15 USDT
-Retorno total: 0.15 USDT
-Retorno porcentaje: 0.00%
-Drawdown máximo: 0.00 USDT

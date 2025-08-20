@@ -1,0 +1,19 @@
+{
+  "symbol": "BTCUSDC",
+  "timeframe": "15m",
+  "data_end": "2025-08-20T10:30:00+00:00",
+  "generated_at": "2025-08-20T10:40:15.776253",
+  "best": {
+    "params": {
+      "rsi_period": 21,
+      "sma_period": 30,
+      "rsi_buy": 40,
+      "rsi_sell": 70
+    },
+    "metrics": {
+      "total_return_pct": 1.75,
+      "sharpe_ratio": 1.07,
+      "max_drawdown_pct": -2.14
+    }
+  }
+}
