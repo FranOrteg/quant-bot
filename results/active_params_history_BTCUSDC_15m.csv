@@ -1,0 +1,3 @@
+ts,symbol,timeframe,strategy,rsi_period,sma_period,rsi_buy,rsi_sell,total_return_pct,sharpe_ratio,max_drawdown_pct
+2025-08-21T13:16:56.699768+00:00,BTCUSDC,15m,rsi_sma,21,30,40,70,1.75,1.07,-2.14
+2025-08-21T14:17:54.320405+00:00,BTCUSDC,15m,rsi_sma,21,30,40,70,1.75,1.07,-2.14

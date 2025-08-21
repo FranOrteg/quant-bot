@@ -1,8 +1,8 @@
 {
   "symbol": "BTCUSDC",
   "timeframe": "15m",
-  "data_end": "2025-08-20T10:30:00+00:00",
-  "generated_at": "2025-08-20T10:40:15.776253",
+  "data_end": "2025-08-21T14:15:00+00:00",
+  "generated_at": "2025-08-21T14:17:53.761869",
   "best": {
     "params": {
       "rsi_period": 21,
