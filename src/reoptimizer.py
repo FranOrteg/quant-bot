@@ -1,3 +1,5 @@
+# src/reoptimizer.py
+
 # -*- coding: utf-8 -*-
 """
 Reoptimizer para PM2:
@@ -15,6 +17,7 @@ import time
 import json
 import subprocess
 import pandas as pd
+import hashlib
 from datetime import datetime, timezone
 from dotenv import load_dotenv
 
@@ -33,6 +36,19 @@ CSV_STALE_MIN    = int(os.getenv("REOPT_CSV_STALE_MIN", "60"))
 OPT_CSV      = f"results/rsi_optimization_{TIMEFRAME}.csv"
 ACTIVE_JSON  = f"results/active_params_{SYMBOL}_{TIMEFRAME}.json"
 HISTORY_CSV  = f"results/active_params_history_{SYMBOL}_{TIMEFRAME}.csv"
+
+def _params_signature(payload: dict) -> str:
+    """
+    Firma estable solo con lo que nos importa para decidir reescritura:
+    estrategia + params (ignora 'generated_at', 'metrics' y demás).
+    """
+    best = payload.get("best", {})
+    core = {
+        "strategy": best.get("strategy"),
+        "params": best.get("params"),
+    }
+    blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    return hashlib.md5(blob.encode()).hexdigest()
 
 def _mtime_minutes(path: str):
     try:
@@ -126,33 +142,53 @@ def _append_history(payload: dict):
 
 def main_loop():
     print(f"🔁 Reoptimizer activo para {SYMBOL} {TIMEFRAME}. CSV: {OPT_CSV} | cada {SLEEP_SECONDS}s")
-    last_payload_blob = None
+    last_sig_path = ACTIVE_JSON + ".hash"
+    last_sig = None
+
+    # Inicializa firma desde .hash o desde JSON existente
+    if os.path.exists(last_sig_path):
+        try:
+            last_sig = open(last_sig_path, "r").read().strip() or None
+        except Exception:
+            last_sig = None
+    elif os.path.exists(ACTIVE_JSON):
+        try:
+            with open(ACTIVE_JSON, "r") as f:
+                existing = json.load(f)
+            last_sig = _params_signature(existing)
+            with open(last_sig_path, "w") as f:
+                f.write(last_sig)
+        except Exception:
+            last_sig = None
 
     while True:
         try:
-            # 1) ¿CSV viejo o inexistente?
-            age_min = _mtime_minutes(OPT_CSV)
-            if age_min >= CSV_STALE_MIN:
-                print(f"⏳ CSV está viejo ({age_min:.1f} min) → re-optimizar")
-                _ensure_dir(OPT_CSV)
+            # 1) Asegurar que el CSV esté fresco (o generarlo)
+            csv_age_min = _mtime_minutes(OPT_CSV)
+            must_optimize = (not os.path.exists(OPT_CSV)) or (csv_age_min > CSV_STALE_MIN)
+
+            if must_optimize:
+                print(f"🧪 CSV ausente/viejo ({csv_age_min:.1f} min) → optimizando…")
                 _run_optimizer()
 
-            # 2) Leer CSV y calcular mejor set
+            # 2) Elegir el mejor set desde el CSV
             best = _pick_best_from_csv(OPT_CSV)
             if best is None:
-                print(f"⏳ CSV no disponible o sin datos válidos: {OPT_CSV}")
+                print(f"⏳ No hay CSV válido aún: {OPT_CSV}")
             else:
-                # 3) Escribir active_params si hay cambios
-                blob = json.dumps(best, sort_keys=True)
-                if blob != last_payload_blob:
-                    _ensure_dir(ACTIVE_JSON)
+                os.makedirs("results", exist_ok=True)
+                new_sig = _params_signature(best)
+
+                if new_sig != last_sig:
                     with open(ACTIVE_JSON, "w") as f:
-                        f.write(blob)
-                    last_payload_blob = blob
+                        f.write(json.dumps(best, sort_keys=True))
+                    with open(last_sig_path, "w") as f:
+                        f.write(new_sig)
+                    last_sig = new_sig
                     _append_history(best)
                     print(f"✅ Actualizado {ACTIVE_JSON} → {best['best']['params']}")
                 else:
-                    print("👍 Sin cambios en el mejor set (no se reescribe ni toca histórico).")
+                    print("👍 Sin cambios en strategy/params; no se reescribe.")
         except Exception as e:
             print(f"⚠️ Reoptimizer warning: {e}")
 
