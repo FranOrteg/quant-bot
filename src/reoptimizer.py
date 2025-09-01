@@ -33,10 +33,11 @@ CSV_STALE_MIN     = int(os.getenv("REOPT_CSV_STALE_MIN", "60"))
 REOPT_FORCE       = os.getenv("REOPT_FORCE", "False").strip() == "True"
 PYTHON_BIN        = os.getenv("PYTHON_BIN", ".venv/bin/python")
 
-# Quality gate (métricas en % igual que en el CSV generado por optimize_rsi)
-MIN_RETURN_PCT    = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))     # ej. "0.5" para exigir >0.5%
-MIN_SHARPE        = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))         # ej. "0.2"
-MAX_DRAWDOWN_PCT  = float(os.getenv("REOPT_MAX_DD_PCT", "99.0"))        # ej. "15" → DD > -15%
+# --- Quality gate (umbrales mínimos para promover nuevos params) ---
+# NOTA: Los campos del CSV están en porcentaje para return y drawdown (p.ej. 1.75, -2.14)
+MIN_RET_PCT   = float(os.getenv("REOPT_MIN_RETURN_PCT", "0"))   # p.ej. 0  (>= 0%)
+MIN_SHARPE    = float(os.getenv("REOPT_MIN_SHARPE", "0"))       # p.ej. 0  (>= 0)
+MAX_DD_PCT    = float(os.getenv("REOPT_MAX_DD_PCT", "20"))      # p.ej. 20 (DD debe ser >= -20%)
 
 OPT_CSV      = f"results/rsi_optimization_{TIMEFRAME}.csv"
 ACTIVE_JSON  = f"results/active_params_{SYMBOL}_{TIMEFRAME}.json"
@@ -46,6 +47,9 @@ HISTORY_CSV  = f"results/active_params_history_{SYMBOL}_{TIMEFRAME}.csv"
 
 
 # -------------------- Utilidades -------------------- #
+def _log(msg: str):
+    print(f"{datetime.now(timezone.utc).isoformat()}: {msg}")
+
 def _ensure_dir_for_file(path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
 
@@ -54,13 +58,34 @@ def _mtime_minutes(path: str) -> float:
         age_sec = max(0, time.time() - os.path.getmtime(path))
         return age_sec / 60.0
     except Exception:
-        return 1e9
+        return 1e9  # muy viejo o no existe
 
 def _params_signature(payload: dict) -> str:
+    """
+    Firma estable basada SOLO en strategy + params, ignorando timestamps/metrics.
+    """
     best = payload.get("best", {})
     core = {"strategy": best.get("strategy"), "params": best.get("params")}
     blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
     return hashlib.md5(blob.encode()).hexdigest()
+
+def _passes_gate(payload: dict):
+    """
+    Verifica que el candidato cumpla los umbrales configurados.
+    Retorna (ok: bool, reason: str)
+    """
+    m = payload["best"]["metrics"]
+    ret = float(m.get("total_return_pct", 0.0))   # % (ej. 1.75)
+    shr = float(m.get("sharpe_ratio", 0.0))
+    dd  = float(m.get("max_drawdown_pct", 0.0))   # % negativo (ej. -2.14)
+
+    if ret < MIN_RET_PCT:
+        return False, f"return {ret:.2f}% < min {MIN_RET_PCT:.2f}%"
+    if shr < MIN_SHARPE:
+        return False, f"sharpe {shr:.2f} < min {MIN_SHARPE:.2f}"
+    if dd < -abs(MAX_DD_PCT):
+        return False, f"drawdown {dd:.2f}% < min {-abs(MAX_DD_PCT):.2f}%"
+    return True, "ok"
 
 def _run_optimizer():
     cmd = [
@@ -69,12 +94,12 @@ def _run_optimizer():
         "--timeframe", TIMEFRAME,
         "--limit", str(REOPT_LIMIT),
     ]
-    print(f"🚀 Lanzando optimización: {' '.join(cmd)}")
+    _log(f"🚀 Lanzando optimización: {' '.join(cmd)}")
     try:
         subprocess.run(cmd, cwd=os.getcwd(), check=True)
-        print("✅ Optimización terminada")
+        _log("✅ Optimización terminada")
     except subprocess.CalledProcessError as e:
-        print(f"⚠️ Optimización falló: {e}")
+        _log(f"⚠️ Optimización falló: {e}")
 
 def _pick_best_from_csv(path: str):
     if not os.path.exists(path):
@@ -84,30 +109,30 @@ def _pick_best_from_csv(path: str):
     if df.empty:
         return None
 
-    # Tipos
+    # Coerción de tipos
     for c in ("total_return", "sharpe_ratio", "max_drawdown"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     required = {"rsi_period", "sma_period", "rsi_buy", "rsi_sell", "total_return"}
     if not required.issubset(df.columns):
-        print(f"⚠️ CSV sin columnas requeridas: faltan {required - set(df.columns)}")
+        _log(f"⚠️ CSV sin columnas requeridas: faltan {required - set(df.columns)}")
         return None
 
     df = df.dropna(subset=["total_return"]).copy()
     if df.empty:
         return None
 
-    # QUALITY GATE (nota: max_drawdown viene en % negativo en el CSV)
+    # QUALITY GATE rápido a nivel de DataFrame (max_drawdown está en % negativo)
     passed = df[
-        (df["total_return"] >= MIN_RETURN_PCT) &
+        (df["total_return"] >= MIN_RET_PCT) &
         (df["sharpe_ratio"] >= MIN_SHARPE) &
-        (df["max_drawdown"] >= -abs(MAX_DRAWDOWN_PCT))
+        (df["max_drawdown"] >= -abs(MAX_DD_PCT))
     ]
     if passed.empty:
-        print(
+        _log(
             "⛔ Ninguna configuración pasó el quality gate → "
-            f"min_return={MIN_RETURN_PCT}%, min_sharpe={MIN_SHARPE}, max_DD=-{abs(MAX_DRAWDOWN_PCT)}%"
+            f"min_return={MIN_RET_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DD_PCT)}%"
         )
         return None
 
@@ -140,9 +165,9 @@ def _pick_best_from_csv(path: str):
             },
         },
         "quality_gate": {
-            "min_return_pct": MIN_RETURN_PCT,
+            "min_return_pct": MIN_RET_PCT,
             "min_sharpe": MIN_SHARPE,
-            "max_drawdown_pct": MAX_DRAWDOWN_PCT,
+            "max_drawdown_pct": MAX_DD_PCT,
         },
     }
     return payload
@@ -167,17 +192,18 @@ def _append_history(payload: dict):
             HISTORY_CSV, mode="a", index=False, header=not os.path.isfile(HISTORY_CSV)
         )
     except Exception as e:
-        print(f"⚠️ No se pudo escribir histórico: {e}")
+        _log(f"⚠️ No se pudo escribir histórico: {e}")
 # ---------------------------------------------------- #
 
 
 def main_loop():
-    print(
+    _log(
         f"🔁 Reoptimizer activo para {SYMBOL} {TIMEFRAME}. "
         f"CSV: {OPT_CSV} | cada {SLEEP_SECONDS}s | Gate: "
-        f"min_ret={MIN_RETURN_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DRAWDOWN_PCT)}%"
+        f"min_ret={MIN_RET_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DD_PCT)}%"
     )
 
+    # Inicializa la firma previa desde .hash o desde el JSON existente
     last_sig = None
     if os.path.exists(ACTIVE_HASH):
         try:
@@ -197,35 +223,42 @@ def main_loop():
 
     while True:
         try:
+            # 1) Asegura frescura del CSV o fuerza optimización
             csv_age_min = _mtime_minutes(OPT_CSV)
             must_optimize = REOPT_FORCE or (not os.path.exists(OPT_CSV)) or (csv_age_min > CSV_STALE_MIN)
-
             if must_optimize:
                 msg = "forzado" if REOPT_FORCE else f"viejo ({csv_age_min:.1f} min)"
-                print(f"🧪 CSV {msg} → ejecutando optimización…")
+                _log(f"🧪 CSV {msg} → ejecutando optimización…")
                 _run_optimizer()
 
+            # 2) Selecciona mejor set que pase el gate
             best = _pick_best_from_csv(OPT_CSV)
             if best is None:
-                print("👉 No hay candidato que pase el gate; se mantiene el activo.")
+                _log("👉 No hay candidato que pase el gate; se mantiene el activo.")
             else:
                 new_sig = _params_signature(best)
                 if new_sig != last_sig:
-                    _ensure_dir_for_file(ACTIVE_JSON)
-                    with open(ACTIVE_JSON, "w") as f:
-                        f.write(json.dumps(best, sort_keys=True, separators=(",", ":")))
-                    _ensure_dir_for_file(ACTIVE_HASH)
-                    with open(ACTIVE_HASH, "w") as f:
-                        f.write(new_sig)
-                    last_sig = new_sig
-                    _append_history(best)
-                    print(f"✅ Actualizado {ACTIVE_JSON} → {best['best']['params']}")
+                    # Doble verificación del gate a nivel de payload (por si el CSV cambia de formato)
+                    ok, reason = _passes_gate(best)
+                    if not ok:
+                        _log(f"🚫 Nuevo set no supera el gate → {reason}. No se promueve.")
+                    else:
+                        _ensure_dir_for_file(ACTIVE_JSON)
+                        with open(ACTIVE_JSON, "w") as f:
+                            f.write(json.dumps(best, sort_keys=True, separators=(",", ":")))
+                        _ensure_dir_for_file(ACTIVE_HASH)
+                        with open(ACTIVE_HASH, "w") as f:
+                            f.write(new_sig)
+                        last_sig = new_sig
+                        _append_history(best)
+                        _log(f"✅ Actualizado {ACTIVE_JSON} → {best['best']['params']}")
                 else:
-                    print("👍 Sin cambios en strategy/params; no se reescribe.")
+                    _log("👍 Sin cambios en strategy/params; no se reescribe.")
 
         except Exception as e:
-            print(f"⚠️ Reoptimizer warning: {e}")
+            _log(f"⚠️ Reoptimizer warning: {e}")
 
+        # pequeño sleep entre ciclos
         time.sleep(SLEEP_SECONDS)
 
 if __name__ == "__main__":
