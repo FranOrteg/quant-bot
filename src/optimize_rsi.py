@@ -1,10 +1,9 @@
 # src/optimize_rsi.py
 # Optimización de RSI+SMA con CLI consistente con el bot en vivo.
-# - Acepta --symbol (por defecto TRADING_SYMBOL o BTCUSDC)
-# - Acepta --timeframe (por defecto 1h)
-# - Guarda CSV de resultados en results/rsi_optimization_<TF>.csv
-# - Exporta best_params a results/best_rsi_<TF>.json (metadata incluida)
-# - Usa exactamente el mismo loader de datos que el bot
+# - Acepta --symbol (TRADING_SYMBOL o par ccxt)
+# - Acepta --timeframe
+# - Guarda CSV en results/rsi_optimization_<TF>.csv
+# - Exporta best_params a results/best_rsi_<TF>.json
 
 import os
 import argparse
@@ -18,11 +17,22 @@ from src.binance_api import get_historical_data
 from src.strategy.rsi_sma import rsi_sma_strategy
 from src.backtest import backtest_signals
 
+def to_ccxt_symbol(sym: str) -> str:
+    """Convierte 'BTCUSDC' → 'BTC/USDC' si no trae barra."""
+    if "/" in sym:
+        return sym
+    QUOTES = ("USDT", "USDC", "BUSD", "FDUSD", "TUSD", "BTC", "ETH", "EUR", "TRY")
+    for q in QUOTES:
+        if sym.endswith(q):
+            base = sym[:-len(q)]
+            return f"{base}/{q}"
+    return sym
+
 def parse_args():
     parser = argparse.ArgumentParser(description="Grid search RSI+SMA")
     parser.add_argument("--symbol", default=os.getenv("TRADING_SYMBOL", "BTCUSDC"),
-                        help="Símbolo (ej: BTCUSDC o BTC/USDT según tu get_historical_data)")
-    parser.add_argument("--timeframe", default="1h", help="TF (ej: 5m, 15m, 1h)")
+                        help="Símbolo (BTCUSDC o BTC/USDT). Se normaliza a ccxt internamente.")
+    parser.add_argument("--timeframe", default="1h", help="TF (5m, 15m, 1h, ...)")
     parser.add_argument("--limit", type=int, default=8000, help="Nº de velas a descargar")
     parser.add_argument("--plot", action="store_true", help="Guardar gráfico del top-5")
     return parser.parse_args()
@@ -31,10 +41,12 @@ def main():
     args = parse_args()
     os.makedirs("results", exist_ok=True)
 
-    # === Descarga de datos (mismo path que el bot) ===
-    df = get_historical_data(args.symbol, args.timeframe, args.limit).copy()
+    symbol_ccxt = to_ccxt_symbol(args.symbol)
+
+    # === Datos (mismo loader que el bot) ===
+    df = get_historical_data(symbol_ccxt, args.timeframe, args.limit).copy()
     if df.empty:
-        raise RuntimeError(f"No se obtuvieron datos para {args.symbol} {args.timeframe}")
+        raise RuntimeError(f"No se obtuvieron datos para {symbol_ccxt} {args.timeframe}")
 
     data_end = pd.to_datetime(df["timestamp"].iloc[-1])
 
@@ -44,8 +56,7 @@ def main():
     rsi_buy_levels  = [30, 35, 40]
     rsi_sell_levels = [60, 65, 70]
 
-    results = []
-
+    rows = []
     for rsi_p in rsi_periods:
         for sma_p in sma_periods:
             for rsi_buy in rsi_buy_levels:
@@ -63,9 +74,7 @@ def main():
                     )
                     df_bt, capital, metrics = backtest_signals(df_copy, timeframe=args.timeframe)
 
-                    # guardamos como porcentaje para lectura humana;
-                    # el selector ordena por total_return igual de bien.
-                    results.append({
+                    rows.append({
                         "strategy": "rsi_sma",
                         "rsi_period": rsi_p,
                         "sma_period": sma_p,
@@ -78,22 +87,23 @@ def main():
                         "timestamp": datetime.utcnow().isoformat()
                     })
 
-    results_df = pd.DataFrame(results)
+    results_df = pd.DataFrame(rows)
     out_csv = f"results/rsi_optimization_{args.timeframe}.csv"
     results_df.to_csv(out_csv, index=False)
 
-    # Top 5 y best set
+    # Top 5 y best
     top5 = results_df.sort_values("total_return", ascending=False).head(5)
     print("\n📈 Top 5 configuraciones RSI + SMA por retorno total:")
     print(top5.to_string(index=False))
 
     best_row = top5.iloc[0].to_dict()
     best_payload = {
-        "symbol": args.symbol,
+        "symbol": symbol_ccxt,
         "timeframe": args.timeframe,
         "data_end": data_end.isoformat(),
         "generated_at": datetime.utcnow().isoformat(),
         "best": {
+            "strategy": "rsi_sma",
             "params": {
                 "rsi_period": int(best_row["rsi_period"]),
                 "sma_period": int(best_row["sma_period"]),
@@ -116,7 +126,7 @@ def main():
     if args.plot:
         plt.figure(figsize=(10, 5))
         plt.bar(top5.index.astype(str), top5["total_return"])
-        plt.title(f"Top 5 RSI+SMA ({args.symbol} {args.timeframe})")
+        plt.title(f"Top 5 RSI+SMA ({symbol_ccxt} {args.timeframe})")
         plt.ylabel("Retorno (%)")
         plt.xlabel("Setup (fila)")
         for i, row in top5.iterrows():

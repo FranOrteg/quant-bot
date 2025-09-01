@@ -13,7 +13,7 @@ load_dotenv()
 
 BALANCE_FILE = 'logs/balance.json'
 
-# Activo de referencia para efectivo (depende de tu símbolo: BTCUSDC → USDC)
+# Activo de referencia para efectivo (BTCUSDC → USDC, BTCUSDT → USDT, etc.)
 QUOTE_ASSET = os.getenv("QUOTE_ASSET", "USDC").upper()
 
 # Balance simulado por defecto (para paper)
@@ -42,7 +42,6 @@ def _build_client() -> Client:
     """
     kwargs = {}
     if USE_BINANCE_TESTNET:
-        # python-binance usa esta URL para testnet spot
         kwargs["testnet"] = True
     if BINANCE_BASE_URL:
         kwargs["base_url"] = BINANCE_BASE_URL
@@ -75,7 +74,6 @@ def fetch_binance_balance():
         raise RuntimeError(f"No hay conectividad con el endpoint de Binance ({e}). "
                            f"Revisa internet/firewall/DNS y BINANCE_BASE_URL si aplica.")
     except Exception as e:
-        # No falla la ejecución: solo informamos
         print(f"⚠️ Aviso: fallo en get_exchange_info(): {e}")
 
     # Llamada firmada: aquí aparecen los -2015 de permisos/IP
@@ -108,8 +106,7 @@ def fetch_binance_balance():
 def load_balance():
     """
     Devuelve balance real (si USE_REAL_BALANCE=True) o paper (persistido en JSON).
-    Si falla la consulta real (p. ej., -2015), informa y hace fallback a paper para que
-    el bot no muera mientras investigas la configuración.
+    Si falla la consulta real, informa y hace fallback a paper para que el bot continúe.
     """
     if USE_REAL_BALANCE:
         try:
@@ -120,7 +117,6 @@ def load_balance():
             print("❌ No se pudo obtener balance real de Binance.")
             print(str(e))
             print("🔁 Haciendo FALLBACK a balance simulado (paper) para continuar.")
-            # Si no existe, crea uno por defecto
             if not os.path.exists(BALANCE_FILE):
                 save_balance(DEFAULT_BALANCE)
             with open(BALANCE_FILE, 'r') as f:
@@ -141,6 +137,7 @@ def update_balance(action, quantity, price):
     """
     En modo real no tocamos nada (se consulta de Binance).
     En modo paper actualizamos y registramos en performance.
+    IMPORTANTE: `price` debe venir neto de fees para VENTA y con fee incluido para COMPRA (como ya haces).
     """
     if USE_REAL_BALANCE:
         return
@@ -160,7 +157,13 @@ def update_balance(action, quantity, price):
             balance[QUOTE_ASSET] = balance.get(QUOTE_ASSET, 0.0) + qty * px
 
     save_balance(balance)
-    log_performance(action, px, {**balance, "USDT": balance.get("USDT", 0.0)})  # compat
+
+    # 👇 compat con utils.log_performance (que usa la clave "USDT" para el cash):
+    balance_for_log = {
+        "USDT": balance.get(QUOTE_ASSET, 0.0),  # mapeamos el cash real a "USDT"
+        "BTC": balance.get("BTC", 0.0),
+    }
+    log_performance(action, px, balance_for_log)
     print_balance(balance)
 
 def print_balance(balance):
