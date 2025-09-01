@@ -1,3 +1,5 @@
+# src/strategy_selector.py
+
 # -*- coding: utf-8 -*-
 """
 Selector de estrategia y parámetros

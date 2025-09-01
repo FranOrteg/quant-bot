@@ -1,3 +1,5 @@
+# src/live_trader.py
+
 # -*- coding: utf-8 -*-
 import time, os, json, logging
 from dotenv import load_dotenv
