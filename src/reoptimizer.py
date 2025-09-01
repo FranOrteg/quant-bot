@@ -1,15 +1,14 @@
 # src/reoptimizer.py
-
 # -*- coding: utf-8 -*-
 """
-Reoptimizer para PM2:
+Reoptimizer con quality-gate:
 - Cada ciclo:
-  1) Comprueba si el CSV results/rsi_optimization_{TF}.csv está viejo (mtime) o vacío.
+  1) Comprueba si el CSV results/rsi_optimization_{TF}.csv está viejo o no existe.
   2) Si está viejo (o forzado), lanza la optimización (subproceso).
   3) Lee el CSV y escoge el mejor set por total_return.
-  4) Escribe results/active_params_{SYMBOL}_{TF}.json solo si cambian strategy/params (hash).
-  5) Añade una línea de histórico en results/active_params_history_{SYMBOL}_{TF}.csv
-- Maneja fallos sin crashear.
+  4) Aplica QUALITY GATE (min retorno, min Sharpe, max DD).
+  5) Escribe results/active_params_{SYMBOL}_{TF}.json solo si pasan el gate y cambian strategy/params.
+  6) Añade histórico en results/active_params_history_{SYMBOL}_{TF}.csv
 """
 
 import os
@@ -29,10 +28,15 @@ SYMBOL            = os.getenv("TRADING_SYMBOL", "BTCUSDC")
 TIMEFRAME         = os.getenv("TRADING_TIMEFRAME", "15m")
 REOPT_EVERY_MIN   = int(os.getenv("REOPT_EVERY_MIN", "60"))
 SLEEP_SECONDS     = int(os.getenv("REOPT_SLEEP_SECONDS", str(REOPT_EVERY_MIN * 60)))
-REOPT_LIMIT       = int(os.getenv("REOPT_LIMIT", "8000"))          # velas para optimización
-CSV_STALE_MIN     = int(os.getenv("REOPT_CSV_STALE_MIN", "60"))    # umbral antigüedad CSV (min)
-REOPT_FORCE       = os.getenv("REOPT_FORCE", "False") == "True"    # forzar optimización en cada ciclo
-PYTHON_BIN        = os.getenv("PYTHON_BIN", ".venv/bin/python")    # binario de python para subproceso
+REOPT_LIMIT       = int(os.getenv("REOPT_LIMIT", "8000"))
+CSV_STALE_MIN     = int(os.getenv("REOPT_CSV_STALE_MIN", "60"))
+REOPT_FORCE       = os.getenv("REOPT_FORCE", "False").strip() == "True"
+PYTHON_BIN        = os.getenv("PYTHON_BIN", ".venv/bin/python")
+
+# Quality gate (métricas en % igual que en el CSV generado por optimize_rsi)
+MIN_RETURN_PCT    = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))     # ej. "0.5" para exigir >0.5%
+MIN_SHARPE        = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))         # ej. "0.2"
+MAX_DRAWDOWN_PCT  = float(os.getenv("REOPT_MAX_DD_PCT", "99.0"))        # ej. "15" → DD > -15%
 
 OPT_CSV      = f"results/rsi_optimization_{TIMEFRAME}.csv"
 ACTIVE_JSON  = f"results/active_params_{SYMBOL}_{TIMEFRAME}.json"
@@ -50,21 +54,15 @@ def _mtime_minutes(path: str) -> float:
         age_sec = max(0, time.time() - os.path.getmtime(path))
         return age_sec / 60.0
     except Exception:
-        return 1e9  # muy viejo o no existe
+        return 1e9
 
 def _params_signature(payload: dict) -> str:
-    """
-    Firma estable basada SOLO en strategy + params, ignorando timestamps/metrics.
-    """
     best = payload.get("best", {})
     core = {"strategy": best.get("strategy"), "params": best.get("params")}
     blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
     return hashlib.md5(blob.encode()).hexdigest()
 
 def _run_optimizer():
-    """
-    Ejecuta: python -m src.optimize_rsi --symbol SYMBOL --timeframe TIMEFRAME --limit REOPT_LIMIT
-    """
     cmd = [
         PYTHON_BIN, "-m", "src.optimize_rsi",
         "--symbol", SYMBOL,
@@ -86,23 +84,35 @@ def _pick_best_from_csv(path: str):
     if df.empty:
         return None
 
-    # coerción de tipos y limpieza mínima
+    # Tipos
     for c in ("total_return", "sharpe_ratio", "max_drawdown"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    required_cols = {"rsi_period", "sma_period", "rsi_buy", "rsi_sell", "total_return"}
-    if not required_cols.issubset(df.columns):
-        print(f"⚠️ CSV sin columnas requeridas: faltan {required_cols - set(df.columns)}")
+    required = {"rsi_period", "sma_period", "rsi_buy", "rsi_sell", "total_return"}
+    if not required.issubset(df.columns):
+        print(f"⚠️ CSV sin columnas requeridas: faltan {required - set(df.columns)}")
         return None
 
-    df = df.dropna(subset=["total_return"])
+    df = df.dropna(subset=["total_return"]).copy()
     if df.empty:
         return None
 
-    best = df.sort_values("total_return", ascending=False).iloc[0]
+    # QUALITY GATE (nota: max_drawdown viene en % negativo en el CSV)
+    passed = df[
+        (df["total_return"] >= MIN_RETURN_PCT) &
+        (df["sharpe_ratio"] >= MIN_SHARPE) &
+        (df["max_drawdown"] >= -abs(MAX_DRAWDOWN_PCT))
+    ]
+    if passed.empty:
+        print(
+            "⛔ Ninguna configuración pasó el quality gate → "
+            f"min_return={MIN_RETURN_PCT}%, min_sharpe={MIN_SHARPE}, max_DD=-{abs(MAX_DRAWDOWN_PCT)}%"
+        )
+        return None
 
-    # construir payload normalizado
+    best = passed.sort_values("total_return", ascending=False).iloc[0]
+
     params = dict(
         rsi_period=int(best["rsi_period"]),
         sma_period=int(best["sma_period"]),
@@ -111,8 +121,8 @@ def _pick_best_from_csv(path: str):
     )
     metrics = dict(
         total_return=float(best.get("total_return", 0.0)),
-        sharpe_ratio=float(best.get("sharpe_ratio", 0.0)) if "sharpe_ratio" in df.columns else 0.0,
-        max_drawdown=float(best.get("max_drawdown", 0.0)) if "max_drawdown" in df.columns else 0.0,
+        sharpe_ratio=float(best.get("sharpe_ratio", 0.0)),
+        max_drawdown=float(best.get("max_drawdown", 0.0)),
     )
 
     payload = {
@@ -128,6 +138,11 @@ def _pick_best_from_csv(path: str):
                 "sharpe_ratio": metrics["sharpe_ratio"],
                 "max_drawdown_pct": metrics["max_drawdown"],
             },
+        },
+        "quality_gate": {
+            "min_return_pct": MIN_RETURN_PCT,
+            "min_sharpe": MIN_SHARPE,
+            "max_drawdown_pct": MAX_DRAWDOWN_PCT,
         },
     }
     return payload
@@ -157,9 +172,12 @@ def _append_history(payload: dict):
 
 
 def main_loop():
-    print(f"🔁 Reoptimizer activo para {SYMBOL} {TIMEFRAME}. CSV: {OPT_CSV} | cada {SLEEP_SECONDS}s")
+    print(
+        f"🔁 Reoptimizer activo para {SYMBOL} {TIMEFRAME}. "
+        f"CSV: {OPT_CSV} | cada {SLEEP_SECONDS}s | Gate: "
+        f"min_ret={MIN_RETURN_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DRAWDOWN_PCT)}%"
+    )
 
-    # Inicializa la firma previa desde .hash o desde el JSON existente
     last_sig = None
     if os.path.exists(ACTIVE_HASH):
         try:
@@ -179,7 +197,6 @@ def main_loop():
 
     while True:
         try:
-            # 1) Asegura frescura del CSV o fuerza optimización
             csv_age_min = _mtime_minutes(OPT_CSV)
             must_optimize = REOPT_FORCE or (not os.path.exists(OPT_CSV)) or (csv_age_min > CSV_STALE_MIN)
 
@@ -188,18 +205,14 @@ def main_loop():
                 print(f"🧪 CSV {msg} → ejecutando optimización…")
                 _run_optimizer()
 
-            # 2) Selecciona mejor set
             best = _pick_best_from_csv(OPT_CSV)
             if best is None:
-                print(f"⏳ No hay CSV válido aún: {OPT_CSV}")
+                print("👉 No hay candidato que pase el gate; se mantiene el activo.")
             else:
                 new_sig = _params_signature(best)
-
                 if new_sig != last_sig:
-                    # solo reescribir si cambia strategy/params
                     _ensure_dir_for_file(ACTIVE_JSON)
                     with open(ACTIVE_JSON, "w") as f:
-                        # sort_keys para estabilidad, separators para JSON compacto
                         f.write(json.dumps(best, sort_keys=True, separators=(",", ":")))
                     _ensure_dir_for_file(ACTIVE_HASH)
                     with open(ACTIVE_HASH, "w") as f:
@@ -213,7 +226,6 @@ def main_loop():
         except Exception as e:
             print(f"⚠️ Reoptimizer warning: {e}")
 
-        # pequeño jitter para evitar sincronización perfecta entre procesos
         time.sleep(SLEEP_SECONDS)
 
 if __name__ == "__main__":

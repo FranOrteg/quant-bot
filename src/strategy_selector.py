@@ -1,18 +1,17 @@
 # src/strategy_selector.py
-
 # -*- coding: utf-8 -*-
-"""
-Selector de estrategia y parámetros
-- Prioriza parámetros activos desde results/active_params_{SYMBOL}_{TF}.json
-- Si no existen, elige el mejor set de results/rsi_optimization_{TF}.csv
-- Fallback seguro (RSI+SMA conservador) si no hay nada
-"""
-
 import os
 import json
 import pandas as pd
+from dotenv import load_dotenv
 
-from src.strategy.rsi_sma import rsi_sma_strategy 
+from src.strategy.rsi_sma import rsi_sma_strategy
+
+load_dotenv()
+
+MIN_RETURN_PCT   = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))
+MIN_SHARPE       = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))
+MAX_DRAWDOWN_PCT = float(os.getenv("REOPT_MAX_DD_PCT", "99.0"))
 
 def _num(x, default=0.0):
     try:
@@ -20,37 +19,54 @@ def _num(x, default=0.0):
     except Exception:
         return float(default)
 
+def _passes_gate(metrics: dict) -> bool:
+    # soporta tanto *_pct como sin sufijo (por compat)
+    ret  = _num(metrics.get("total_return_pct", metrics.get("total_return", -1e9)))
+    shrp = _num(metrics.get("sharpe_ratio", -1e9))
+    dd   = _num(metrics.get("max_drawdown_pct", metrics.get("max_drawdown", -1e9)))
+    return (ret >= MIN_RETURN_PCT) and (shrp >= MIN_SHARPE) and (dd >= -abs(MAX_DRAWDOWN_PCT))
+
 def _read_active_params(symbol: str, tf: str):
-    """Lee results/active_params_{symbol}_{tf}.json si existe."""
     path = f"results/active_params_{symbol}_{tf}.json"
     if not os.path.exists(path):
         return None
     try:
         with open(path, "r") as f:
             blob = json.load(f)
-        best = blob.get("best", {})
-        params = best.get("params", {})
+        best    = blob.get("best", {})
+        params  = best.get("params", {})
         metrics = best.get("metrics", {})
-        strat = best.get("strategy", "rsi_sma")
+        strat   = best.get("strategy", "rsi_sma")
+
+        if not _passes_gate(metrics):
+            print(f"⚠️ ACTIVE_PARAMS no pasa el gate ({metrics}). Se ignora.")
+            return None
+
         return dict(strategy=strat, params=params, metrics=metrics, source="ACTIVE_PARAMS_JSON", path=path)
-    except Exception:
+    except Exception as e:
+        print(f"⚠️ Error leyendo {path}: {e}")
         return None
 
 def _best_from_csv(path: str, strat: str, param_cols):
-    """Busca el mejor registro por total_return en un CSV de resultados."""
     if not os.path.exists(path):
         return None
     df = pd.read_csv(path)
     if df.empty:
         return None
 
-    # Asegurar tipos numéricos
     for c in ["total_return", "sharpe_ratio", "max_drawdown"]:
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
-    df = df.dropna(subset=["total_return"])
+    # Quality gate sobre el CSV (total_return está en %)
+    df = df.dropna(subset=["total_return"]).copy()
+    df = df[
+        (df["total_return"] >= MIN_RETURN_PCT) &
+        (df["sharpe_ratio"] >= MIN_SHARPE) &
+        (df["max_drawdown"] >= -abs(MAX_DRAWDOWN_PCT))
+    ]
     if df.empty:
+        print("⚠️ CSV sin filas que pasen el gate.")
         return None
 
     best = df.sort_values("total_return", ascending=False).iloc[0]
@@ -70,16 +86,9 @@ def _best_from_csv(path: str, strat: str, param_cols):
     return dict(strategy=strat, params=params, metrics=metrics, source=path)
 
 def select_best_strategy(symbol: str = "BTCUSDC", tf: str = "15m"):
-    """
-    Prioridad:
-    1) results/active_params_{symbol}_{tf}.json
-    2) results/rsi_optimization_{tf}.csv
-    3) Fallback conservador
-    """
-    # 1) Activo
+    # 1) Activo (si pasa el gate)
     active = _read_active_params(symbol, tf)
     if active:
-        # Por ahora solo soportamos rsi_sma
         strategy_name = "rsi_sma"
         mapper = {"rsi_sma": rsi_sma_strategy}
         print("\n🏆 Estrategia seleccionada")
@@ -89,23 +98,21 @@ def select_best_strategy(symbol: str = "BTCUSDC", tf: str = "15m"):
         print("   • Fuente     :", f"{active['source']} ✅")
         return strategy_name, mapper[strategy_name], active["params"], active["metrics"]
 
-    # 2) CSVs
+    # 2) CSV (si pasa el gate)
     suf = f"_{tf}" if tf else ""
     rsi_csv = f"results/rsi_optimization{suf}.csv"
     rsi_best = _best_from_csv(rsi_csv, "rsi_sma", ["rsi_period", "sma_period", "rsi_buy", "rsi_sell"])
 
-    candidates = [c for c in [rsi_best] if c]
-    if candidates:
-        best = candidates[0]
+    if rsi_best:
         mapper = {"rsi_sma": rsi_sma_strategy}
         print("\n🏆 Estrategia seleccionada")
-        print("   • Nombre     :", best["strategy"])
-        print("   • Parámetros :", best["params"])
-        print("   • Métricas   :", best["metrics"])
-        print("   • Fuente     :", f"{best['source']} ✅")
-        return best["strategy"], mapper[best["strategy"]], best["params"], best["metrics"]
+        print("   • Nombre     :", rsi_best["strategy"])
+        print("   • Parámetros :", rsi_best["params"])
+        print("   • Métricas   :", rsi_best["metrics"])
+        print("   • Fuente     :", f"{rsi_best['source']} ✅")
+        return rsi_best["strategy"], mapper[rsi_best["strategy"]], rsi_best["params"], rsi_best["metrics"]
 
-    # 3) Fallback seguro
+    # 3) Fallback seguro si nada pasa el gate
     fallback_params = {"rsi_period": 14, "sma_period": 50, "rsi_buy": 30, "rsi_sell": 70}
     fallback_metrics = {"total_return": 0.0, "sharpe_ratio": 0.0, "max_drawdown": 0.0, "score": 0.0}
     print("\n🏆 Estrategia seleccionada")
