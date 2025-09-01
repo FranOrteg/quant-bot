@@ -98,7 +98,7 @@ def compute_indicators_and_signal(df: pd.DataFrame, rsi_period: int, sma_period:
     roll_loss = pd.Series(loss, index=df.index).rolling(rsi_period, min_periods=rsi_period).mean()
     rs = roll_gain / roll_loss.replace(0, np.nan)
     df["rsi"] = 100 - (100 / (1 + rs))
-    df["rsi"] = df["rsi"].fillna(method="bfill")  # suavizar arranque
+    df["rsi"] = df["rsi"].bfill()  # suavizar arranque
 
     # Señal estilo rsi_sma (long-only): 
     # entrada si precio > SMA y RSI < rsi_buy; salida si RSI > rsi_sell
