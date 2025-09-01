@@ -4,6 +4,7 @@
 import time, os, json, logging
 from dotenv import load_dotenv
 import pandas as pd
+import hashlib
 from src.binance_api import get_historical_data
 
 # Trading real o paper
@@ -50,10 +51,29 @@ logging.info(f"🧐 Estrategia {strategy_name}   TF={TIMEFRAME}   params={params
 
 # Hot reload guard
 _last_active_mtime = None
+# 🔒 Evita "♻️ Reload..." al inicio si no hay cambios reales
+_last_active_sig = None
+try:
+    from hashlib import md5 as _md5
+    def _sig_init():
+        core = {"strategy": strategy_name, "params": params}
+        blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
+        return _md5(blob.encode()).hexdigest()
+    _last_active_sig = _sig_init()
+except Exception:
+    _last_active_sig = None
+
+def _params_signature(strategy_name: str, params: dict) -> str:
+    """Firma estable para detectar cambios reales en strategy/params."""
+    core = {"strategy": strategy_name, "params": params}
+    blob = json.dumps(core, sort_keys=True, separators=(",", ":"))
+    return hashlib.md5(blob.encode()).hexdigest()
+
 
 def _maybe_reload_active_params():
-    """Si existe results/active_params_{SYMBOL}_{TF}.json y cambia el mtime, recarga en caliente."""
-    global strategy_name, strategy_func, params, _last_active_mtime
+    """Si existe results/active_params_{SYMBOL}_{TF}.json y cambia el mtime,
+    recarga en caliente SOLO si cambian strategy/params (hash)."""
+    global strategy_name, strategy_func, params, _last_active_mtime, _last_active_sig
     try:
         if not os.path.exists(ACTIVE_PATH):
             return
@@ -65,24 +85,34 @@ def _maybe_reload_active_params():
             blob = json.load(f)
 
         best = blob.get("best", {})
-        new_params = best.get("params", {})
-        new_strategy = best.get("strategy", "rsi_sma")
-
-        # Solo soportamos rsi_sma aquí; amplía si activas otras
+        new_params = best.get("params", {}) or {}
+        new_strategy = best.get("strategy", "rsi_sma") or "rsi_sma"
         if new_strategy != "rsi_sma":
             new_strategy = "rsi_sma"
 
-        _last_active_mtime = mtime
-        strategy_name = new_strategy
-        strategy_func = rsi_sma_strategy
-        params = dict(
+        # Normaliza tipos por si vienen como str
+        normalized_params = dict(
             rsi_period=int(new_params["rsi_period"]),
             sma_period=int(new_params["sma_period"]),
             rsi_buy=int(new_params["rsi_buy"]),
             rsi_sell=int(new_params["rsi_sell"])
         )
-        logging.info(f"♻️ Parámetros actualizados en caliente desde {ACTIVE_PATH}: {params}")
-        print(f"♻️ Reload params: {params}")
+
+        new_sig = _params_signature(new_strategy, normalized_params)
+
+        # ✅ Solo si cambia la firma, actualizamos e imprimimos
+        if new_sig != _last_active_sig:
+            _last_active_sig = new_sig
+            _last_active_mtime = mtime
+            strategy_name = new_strategy
+            strategy_func = rsi_sma_strategy
+            params = normalized_params
+            logging.info(f"♻️ Parámetros actualizados en caliente desde {ACTIVE_PATH}: {params}")
+            print(f"♻️ Reload params: {params}")
+        else:
+            # Cambió el mtime (p.ej. regenerated_at), pero NO cambiaron strategy/params
+            _last_active_mtime = mtime
+            # no imprimimos nada
     except Exception as e:
         logging.warning(f"⚠️ No se pudieron recargar parámetros activos: {e}")
 
