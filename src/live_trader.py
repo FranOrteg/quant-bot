@@ -268,17 +268,14 @@ def run_bot():
         rsi_v = getattr(last, "rsi", float("nan"))
         sma_v = getattr(last, "sma", float("nan"))
         ema_v = getattr(last, "ema200", float("nan"))
-        atrp  = getattr(last, "atr_pct", float("nan"))
         raw   = int(getattr(last, "signal_raw", last.position))
-        reason = getattr(last, "reason", "")
 
         logging.info(
-            f"Precio: {last.close:.2f} | raw={raw} | action={action} | "
+            f"Precio: {last.close:.2f} | raw={raw} "
             f"RSI={0 if math.isnan(rsi_v) else rsi_v:.1f} | "
             f"SMA{params.get('sma_period', '')}={0 if math.isnan(sma_v) else sma_v:.2f} | "
             f"EMA200={0 if math.isnan(ema_v) else ema_v:.2f} | "
-            f"ATR%={0 if math.isnan(atrp) else atrp:.2f} | "
-            f"Strat={strategy_name} | Params={params} | {reason}"
+            f"Action={action} "
         )
 
         # 3) Ejecuta trade si corresponde
