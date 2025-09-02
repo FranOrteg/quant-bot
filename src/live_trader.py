@@ -95,115 +95,68 @@ PARAM_COOLDOWN_BARS = 12  # evita cambios de params demasiado frecuentes
 def _maybe_reload_active_params():
     """
     Si existe ACTIVE_PATH y cambió su mtime, recarga en caliente la estrategia/params
-    respetando un cooldown de PARAM_COOLDOWN_BARS velas. Arrastra también parámetros
-    opcionales como lookback_bars si vienen en el JSON.
+    respetando un cooldown de PARAM_COOLDOWN_BARS velas. Soporta 'lookback_bars'.
     """
-    global strategy_name, strategy_func, params
-    global _last_active_mtime, _last_active_sig, LAST_PARAM_APPLY_TS
+    global strategy_name, strategy_func, params, _last_active_mtime, _last_active_sig, LAST_PARAM_APPLY_TS
 
     try:
         if not os.path.exists(ACTIVE_PATH):
             return
 
         mtime = os.path.getmtime(ACTIVE_PATH)
-        # Si no hay cambios de fichero desde la última lectura → salir
         if _last_active_mtime is not None and mtime <= _last_active_mtime:
             return
 
-        # Respeta el cooldown basado en nº de velas
+        # cooldown por número de velas
         now = time.time()
         if now - LAST_PARAM_APPLY_TS < PARAM_COOLDOWN_BARS * INTERVAL:
             return
 
-        # Lee el JSON
         with open(ACTIVE_PATH, "r") as f:
-            payload = json.load(f)
+            blob = json.load(f)
 
-        # (opcional) coherencia básica de timeframe
-        if payload.get("timeframe") and payload["timeframe"] != TIMEFRAME:
-            # Marca mtime para no spamear logs, pero no apliques
-            _last_active_mtime = mtime
-            logging.info(
-                f"⏭️ Ignorando active_params por TF distinto: file={payload['timeframe']} live={TIMEFRAME}"
-            )
-            return
+        best = blob.get("best", {})
+        new_params   = (best.get("params") or {})
+        new_strategy = (best.get("strategy") or "rsi_sma")
 
-        best = payload.get("best", {}) or {}
-        new_params_raw = best.get("params", {}) or {}
-        new_strategy = (best.get("strategy") or "rsi_sma").strip()
-
-        # Solo soportamos rsi_sma actualmente
+        # solo soportamos rsi_sma en live actual
         if new_strategy != "rsi_sma":
             new_strategy = "rsi_sma"
 
-        # Normaliza/convierte tipos de los cuatro parámetros base
-        def _as_int(key, default):
-            try:
-                return int(str(new_params_raw.get(key, default)))
-            except Exception:
-                return int(default)
+        # normaliza y añade lookback_bars si viene en el JSON (default 8)
+        lb = int(new_params.get("lookback_bars", 8))
+        # saneo simple de lb
+        if lb < 3:  lb = 3
+        if lb > 50: lb = 50
 
         applied_params = dict(
-            rsi_period=_as_int("rsi_period", 14),
-            sma_period=_as_int("sma_period", 50),
-            rsi_buy=_as_int("rsi_buy", 25),
-            rsi_sell=_as_int("rsi_sell", 75),
+            rsi_period=int(new_params.get("rsi_period", 14)),
+            sma_period=int(new_params.get("sma_period", 50)),
+            rsi_buy=int(new_params.get("rsi_buy", 25)),
+            rsi_sell=int(new_params.get("rsi_sell", 75)),
+            lookback_bars=lb,
         )
 
-        # Parámetros OPCIONALES (si están en el JSON se copian, si no, se omiten)
-        # Nota: tu estrategia los puede ignorar con **kwargs si no los usa.
-        def _as_bool(val):
-            if isinstance(val, bool):
-                return val
-            s = str(val).strip().lower()
-            return s in ("1", "true", "t", "yes", "y", "on")
-
-        optional_spec = {
-            "lookback_bars": "int",
-            "ema200_filter_on": "bool",
-            "atr_pct_min": "float",
-            "min_volume_mult": "float",
-            "sma_margin_pct": "float",
-        }
-        for k, kind in optional_spec.items():
-            if k in new_params_raw and new_params_raw[k] is not None:
-                try:
-                    if kind == "int":
-                        applied_params[k] = int(str(new_params_raw[k]))
-                    elif kind == "float":
-                        applied_params[k] = float(str(new_params_raw[k]))
-                    elif kind == "bool":
-                        applied_params[k] = _as_bool(new_params_raw[k])
-                except Exception:
-                    # Si un opcional viene corrupto, lo ignoramos sin romper reload
-                    pass
-
-        # Firma estable de (estrategia + params) para evitar ruido
         new_sig = _params_signature(new_strategy, applied_params)
-
-        # Si la firma no cambia, solo actualiza mtime y sal (evita spam)
         if _last_active_sig is not None and new_sig == _last_active_sig:
+            # mismos params; no hacer ruido
             _last_active_mtime = mtime
             return
 
-        # Aplica cambios
+        # aplica cambios
         strategy_name = new_strategy
         strategy_func = rsi_sma_strategy
-        params = applied_params
-
+        params        = applied_params
         _last_active_mtime = mtime
-        _last_active_sig = new_sig
+        _last_active_sig   = new_sig
         LAST_PARAM_APPLY_TS = now
 
-        metrics = best.get("metrics", {})
-        logging.info(
-            f"♻️ Parámetros actualizados en caliente desde {ACTIVE_PATH}: "
-            f"{params} | metrics={metrics}"
-        )
+        logging.info(f"♻️ Parámetros actualizados en caliente desde {ACTIVE_PATH}: {params}")
         print(f"♻️ Reload params: {params}")
 
     except Exception as e:
         logging.warning(f"⚠️ No se pudieron recargar parámetros activos: {e}")
+
 
 
 # === Persistencia incremental de datos =======================================
