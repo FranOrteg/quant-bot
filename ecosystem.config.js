@@ -67,7 +67,8 @@ module.exports = {
         // === Quality gate (mismos nombres que usa el código) ===
         REOPT_MIN_RETURN_PCT: '0',      // exige retorno >= 0% (ajústalo si quieres)
         REOPT_MIN_SHARPE: '0',          // exige Sharpe >= 0
-        REOPT_MAX_DD_PCT: '20',         // drawdown no peor que -20%
+        REOPT_MAX_DD_PCT: '20', 
+        REOPT_ALLOW_ABS_FALLBACK: 'True',        
 
         // === Asegura el intérprete correcto del subproceso ===
         PYTHON_BIN: '/home/ubuntu/quant-bot/.venv/bin/python'

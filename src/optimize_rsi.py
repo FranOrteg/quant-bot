@@ -55,7 +55,7 @@ def main():
     sma_periods     = [10, 15, 20, 30]
     rsi_buy_levels  = [30, 35, 40]
     rsi_sell_levels = [60, 65, 70]
-    lookbacks       = _parse_lookback_grid()   # ← NUEVO
+    lb_values       = [6, 8]  # <-- añade/ajusta a tu gusto
 
     results = []
 
@@ -65,7 +65,7 @@ def main():
                 for rsi_sell in rsi_sell_levels:
                     if rsi_buy >= rsi_sell:
                         continue
-                    for lb in lookbacks:  # ← NUEVO LOOP
+                    for lb in lb_values:  # <-- NUEVO bucle
                         df_copy = df.copy()
                         df_copy = rsi_sma_strategy(
                             df_copy,
@@ -73,24 +73,24 @@ def main():
                             sma_period=sma_p,
                             rsi_buy=rsi_buy,
                             rsi_sell=rsi_sell,
-                            lookback_bars=lb,   # ← NUEVO
+                            lookback_bars=lb,    # <-- pasa LB a la estrategia
                         )
                         df_bt, capital, metrics = backtest_signals(df_copy, timeframe=args.timeframe)
 
-                        # Guardamos como porcentaje (coherente con reoptimizer)
                         results.append({
                             "strategy": "rsi_sma",
                             "rsi_period": rsi_p,
                             "sma_period": sma_p,
                             "rsi_buy": rsi_buy,
                             "rsi_sell": rsi_sell,
-                            "lookback_bars": lb,                       # ← NUEVO EN CSV
+                            "lookback_bars": lb,  # <-- guarda LB en CSV
                             "capital_final": round(capital, 2),
                             "total_return": round(metrics["total_return"] * 100, 2),
                             "sharpe_ratio": round(metrics["sharpe_ratio"], 2),
                             "max_drawdown": round(metrics["max_drawdown"] * 100, 2),
                             "timestamp": datetime.utcnow().isoformat()
                         })
+
 
     results_df = pd.DataFrame(results)
     out_csv = f"results/rsi_optimization_{args.timeframe}.csv"
@@ -113,7 +113,7 @@ def main():
                 "sma_period": int(best_row["sma_period"]),
                 "rsi_buy": int(best_row["rsi_buy"]),
                 "rsi_sell": int(best_row["rsi_sell"]),
-                "lookback_bars": int(best_row["lookback_bars"]),   # ← NUEVO EN JSON
+                "lookback_bars": int(best_row.get("lookback_bars", 0)),  # <-- NUEVO
             },
             "metrics": {
                 "total_return_pct": float(best_row["total_return"]),
@@ -122,6 +122,7 @@ def main():
             }
         }
     }
+
     best_json = f"results/best_rsi_{args.timeframe}.json"
     with open(best_json, "w") as f:
         json.dump(best_payload, f, indent=2)

@@ -74,57 +74,68 @@ def _run_optimizer():
     except subprocess.CalledProcessError as e:
         print(f"⚠️ Optimización falló: {e}")
 
+# ==== NUEVA ENV ARRIBA, junto al resto de config ====
+ALLOW_ABS_FALLBACK = os.getenv("REOPT_ALLOW_ABS_FALLBACK", "False").strip().lower() in ("1","true","yes","on")
+# =====================================================
+
 def _pick_best_from_csv(path: str):
     if not os.path.exists(path):
-        return None, "CSV no existe"
+        return None
 
     df = pd.read_csv(path)
     if df.empty:
-        return None, "CSV vacío"
+        return None
 
-    # Coerción de tipos
-    for c in ("total_return", "sharpe_ratio", "max_drawdown"):
+    # Tipos numéricos
+    for c in ("total_return", "sharpe_ratio", "max_drawdown", "lookback_bars", "rsi_period", "sma_period", "rsi_buy", "rsi_sell"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     required = {"rsi_period", "sma_period", "rsi_buy", "rsi_sell", "total_return"}
     if not required.issubset(df.columns):
-        return None, f"CSV sin columnas requeridas: faltan {required - set(df.columns)}"
+        print(f"⚠️ CSV sin columnas requeridas: faltan {required - set(df.columns)}")
+        return None
 
     df = df.dropna(subset=["total_return"]).copy()
     if df.empty:
-        return None, "CSV sin total_return válido"
+        return None
 
-    # Quality gate (max_drawdown es negativo)
+    # --- QUALITY GATE (max_drawdown viene en % y suele ser negativo) ---
     passed = df[
         (df["total_return"] >= MIN_RETURN_PCT) &
         (df["sharpe_ratio"] >= MIN_SHARPE) &
         (df["max_drawdown"] >= -abs(MAX_DRAWDOWN_PCT))
     ]
+
     if passed.empty:
-        return None, (
-            f"ninguna fila pasa gate(min_ret={MIN_RETURN_PCT}%, "
-            f"min_sharpe={MIN_SHARPE}, maxDD=-{abs(MAX_DRAWDOWN_PCT)}%)"
+        msg = (
+            "⛔ Ningún setup pasó el gate → "
+            f"min_return={MIN_RETURN_PCT}%, min_sharpe={MIN_SHARPE}, maxDD=-{abs(MAX_DRAWDOWN_PCT)}%"
         )
+        print(msg)
 
-    best = passed.sort_values("total_return", ascending=False).iloc[0]
-
-    # lookback_bars es opcional
-    lb = int(best["lookback_bars"]) if "lookback_bars" in best.index else None
+        if not ALLOW_ABS_FALLBACK:
+            return None
+        # Fallback: mejor absoluto por total_return (aunque sea negativo)
+        print("↩️ REOPT_ALLOW_ABS_FALLBACK=on → usando Top ABS por total_return.")
+        candidate = df.sort_values("total_return", ascending=False).iloc[0]
+    else:
+        candidate = passed.sort_values("total_return", ascending=False).iloc[0]
 
     params = dict(
-        rsi_period=int(best["rsi_period"]),
-        sma_period=int(best["sma_period"]),
-        rsi_buy=int(best["rsi_buy"]),
-        rsi_sell=int(best["rsi_sell"]),
+        rsi_period = int(candidate["rsi_period"]),
+        sma_period = int(candidate["sma_period"]),
+        rsi_buy    = int(candidate["rsi_buy"]),
+        rsi_sell   = int(candidate["rsi_sell"]),
     )
-    if lb is not None:
-        params["lookback_bars"] = lb
+    # Si el CSV trae lookback_bars, lo incorporamos
+    if "lookback_bars" in candidate and not pd.isna(candidate["lookback_bars"]):
+        params["lookback_bars"] = int(candidate["lookback_bars"])
 
     metrics = dict(
-        total_return=float(best.get("total_return", 0.0)),
-        sharpe_ratio=float(best.get("sharpe_ratio", 0.0)),
-        max_drawdown=float(best.get("max_drawdown", 0.0)),
+        total_return = float(candidate.get("total_return", 0.0)),
+        sharpe_ratio = float(candidate.get("sharpe_ratio", 0.0)) if "sharpe_ratio" in df.columns else 0.0,
+        max_drawdown = float(candidate.get("max_drawdown", 0.0)) if "max_drawdown" in df.columns else 0.0,
     )
 
     payload = {
@@ -145,9 +156,11 @@ def _pick_best_from_csv(path: str):
             "min_return_pct": MIN_RETURN_PCT,
             "min_sharpe": MIN_SHARPE,
             "max_drawdown_pct": MAX_DRAWDOWN_PCT,
+            "allow_abs_fallback": ALLOW_ABS_FALLBACK,
         },
     }
-    return payload, "ok"
+    return payload
+
 
 def _append_history(payload: dict):
     try:
