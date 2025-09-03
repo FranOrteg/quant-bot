@@ -1,4 +1,3 @@
-# src/optimize_rsi.py
 # -*- coding: utf-8 -*-
 # Optimización de RSI+SMA con grid que incluye lookback_bars.
 # - Acepta --symbol / --timeframe / --limit / --plot / --write-active
@@ -32,7 +31,8 @@ def _parse_int_list(text: str, default: list[int]) -> list[int]:
     return out or default
 
 def _env_list(name: str, default: list[int]) -> list[int]:
-    return _parse_int_list(os.getenv(name, ""), default)
+    val = os.getenv(name, "")
+    return _parse_int_list(val, default)
 
 def _no_slash_symbol(sym: str) -> str:
     return sym.replace("/", "")
@@ -158,7 +158,7 @@ def main():
     print(f"\n🔎 Gate info (min_ret={g_min_ret}%, min_sharpe={g_min_shp}, maxDD=-{abs(g_max_dd)}%): "
           f"{len(passed)}/{len(results_df)} filas pasan")
 
-    # Best (por retorno, sin aplicar gate aquí; el gate lo aplicará el reoptimizer)
+    # Best (por retorno; el gate lo aplica el reoptimizer)
     best_row = top5.iloc[0].to_dict()
     best_payload = {
         "symbol": args.symbol,

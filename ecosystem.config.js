@@ -62,15 +62,27 @@ module.exports = {
         REOPT_SLEEP_SECONDS: '900',     // 15 min exactos entre ciclos
         REOPT_CSV_STALE_MIN: '60',      // si el CSV es más viejo de 60', reoptimiza
         REOPT_LIMIT: '8000',            // velas para la optimización
-        REOPT_FORCE: 'False',           // ponlo a 'True' si quieres forzar un ciclo
+        REOPT_FORCE: 'False',           // pon a 'True' si quieres forzar un ciclo
 
-        // === Quality gate (mismos nombres que usa el código) ===
+        // === Quality gate ===
         REOPT_MIN_RETURN_PCT: '0',      // exige retorno >= 0% (ajústalo si quieres)
         REOPT_MIN_SHARPE: '0',          // exige Sharpe >= 0
-        REOPT_MAX_DD_PCT: '20', 
-        REOPT_ALLOW_ABS_FALLBACK: 'True',        
+        REOPT_MAX_DD_PCT: '20',
+        REOPT_ALLOW_ABS_FALLBACK: 'True',
 
-        // === Asegura el intérprete correcto del subproceso ===
+        // === Promociona solo si mejora (nuevo) ===
+        REOPT_ONLY_IF_BETTER: 'True',
+        REOPT_MIN_IMPROVE_RET: '0.25',      // mejora mínima en retorno (%) para promover
+        REOPT_MIN_IMPROVE_SHARPE: '0.15',   // mejora mínima en Sharpe para promover
+
+        // === (Opcional) Controlar tamaño del grid desde ENV (optimize_rsi) ===
+        // RSI_PERIODS: '5,10,14,21',
+        // SMA_PERIODS: '10,15,20,30',
+        // RSI_BUY_LEVELS: '30,35,40',
+        // RSI_SELL_LEVELS: '60,65,70',
+        // RSI_LOOKBACK_GRID: '6,8,12',
+
+        // === Intérprete del subproceso ===
         PYTHON_BIN: '/home/ubuntu/quant-bot/.venv/bin/python'
       }
     },

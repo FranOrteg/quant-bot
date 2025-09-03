@@ -1,4 +1,3 @@
-# src/reoptimizer.py
 # -*- coding: utf-8 -*-
 """
 Reoptimizer con quality-gate y fallback opcional:
@@ -30,16 +29,21 @@ REOPT_EVERY_MIN   = int(os.getenv("REOPT_EVERY_MIN", "60"))
 SLEEP_SECONDS     = int(os.getenv("REOPT_SLEEP_SECONDS", str(REOPT_EVERY_MIN * 60)))
 REOPT_LIMIT       = int(os.getenv("REOPT_LIMIT", "8000"))
 CSV_STALE_MIN     = int(os.getenv("REOPT_CSV_STALE_MIN", "60"))
-REOPT_FORCE       = os.getenv("REOPT_FORCE", "False").strip() == "True"
+REOPT_FORCE       = os.getenv("REOPT_FORCE", "False").strip().lower() in ("1","true","yes","on")
 PYTHON_BIN        = os.getenv("PYTHON_BIN", ".venv/bin/python")
 
 # Quality gate (métricas en % como en optimize_rsi)
-MIN_RETURN_PCT    = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))  # ej 0.5
-MIN_SHARPE        = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))      # ej 0.2
-MAX_DRAWDOWN_PCT  = float(os.getenv("REOPT_MAX_DD_PCT", "20.0"))     # ej 15 → DD >= -15%
+MIN_RETURN_PCT    = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))
+MIN_SHARPE        = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))
+MAX_DRAWDOWN_PCT  = float(os.getenv("REOPT_MAX_DD_PCT", "20.0"))
 
 # Fallback: si nadie pasa el gate, ¿usar el mejor absoluto?
-ALLOW_ABS_FALLBACK = os.getenv("REOPT_ALLOW_ABS_FALLBACK", "False").strip().lower() in ("1", "true", "yes", "on")
+ALLOW_ABS_FALLBACK = os.getenv("REOPT_ALLOW_ABS_FALLBACK", "False").strip().lower() in ("1","true","yes","on")
+
+# Promociona solo si mejora frente al activo (retorno o Sharpe)
+ONLY_IF_BETTER     = os.getenv("REOPT_ONLY_IF_BETTER", "True").strip().lower() in ("1","true","yes","on")
+MIN_IMPROVE_RET    = float(os.getenv("REOPT_MIN_IMPROVE_RET", "0.25"))   # en puntos %
+MIN_IMPROVE_SHARPE = float(os.getenv("REOPT_MIN_IMPROVE_SHARPE", "0.15"))
 
 OPT_CSV      = f"results/rsi_optimization_{TIMEFRAME}.csv"
 ACTIVE_JSON  = f"results/active_params_{SYMBOL}_{TIMEFRAME}.json"
@@ -51,6 +55,15 @@ HISTORY_CSV  = f"results/active_params_history_{SYMBOL}_{TIMEFRAME}.csv"
 # -------------------- Utilidades -------------------- #
 def _ensure_dir_for_file(path: str):
     os.makedirs(os.path.dirname(path), exist_ok=True)
+
+def _load_current_active():
+    try:
+        if os.path.exists(ACTIVE_JSON):
+            with open(ACTIVE_JSON, "r") as f:
+                return json.load(f)
+    except Exception:
+        pass
+    return None
 
 def _mtime_minutes(path: str) -> float:
     try:
@@ -79,14 +92,13 @@ def _run_optimizer():
     except subprocess.CalledProcessError as e:
         print(f"⚠️ Optimización falló: {e}")
 
-
 def _pick_best_from_csv(path: str):
     """
     Devuelve (payload, status):
       - payload: dict con 'best' o None si no hay candidato
       - status : 'gate' si pasó el quality gate, 'abs_fallback' si se usó fallback,
                  'no_gate_pass' si no hay candidato y fallback está desactivado,
-                 'no_file'/'empty' si no hay CSV o está vacío.
+                 'no_file'/'empty'/'bad_csv'/'no_total_return' para otros casos.
     """
     if not os.path.exists(path):
         return None, "no_file"
@@ -110,7 +122,7 @@ def _pick_best_from_csv(path: str):
     if df.empty:
         return None, "no_total_return"
 
-    # QUALITY GATE
+    # QUALITY GATE (max_drawdown suele estar en negativo; exigimos >= -MAX_DRAWDOWN_PCT)
     passed = df[
         (df["total_return"] >= MIN_RETURN_PCT) &
         (df["sharpe_ratio"] >= MIN_SHARPE) &
@@ -168,8 +180,6 @@ def _pick_best_from_csv(path: str):
         },
     }
     return payload, status
-
-
 
 def _append_history(payload: dict):
     try:
@@ -233,6 +243,27 @@ def main_loop():
                 _run_optimizer()
 
             best, status = _pick_best_from_csv(OPT_CSV)
+            current = _load_current_active()
+
+            # Opcional: solo promover si mejora
+            if best and ONLY_IF_BETTER and current is not None:
+                cur = current.get("best", {})
+                new = best.get("best",  {})
+                cur_m, new_m = cur.get("metrics", {}), new.get("metrics", {})
+
+                cur_ret = float(cur_m.get("total_return_pct", -1e9))
+                new_ret = float(new_m.get("total_return_pct", -1e9))
+                cur_sh  = float(cur_m.get("sharpe_ratio", -1e9))
+                new_sh  = float(new_m.get("sharpe_ratio", -1e9))
+
+                improves_ret   = new_ret >= cur_ret + MIN_IMPROVE_RET
+                improves_sharp = new_sh  >= cur_sh  + MIN_IMPROVE_SHARPE
+
+                if not (improves_ret or improves_sharp):
+                    print(f"🛑 Candidate NO mejora: ret {new_ret:.2f}% vs {cur_ret:.2f}% | "
+                          f"sharpe {new_sh:.2f} vs {cur_sh:.2f}. Se mantiene el activo.")
+                    best = None  # anula la promoción
+
             if not best:
                 print(f"👉 Sin candidato ({status}); se mantiene el activo.")
             else:
@@ -249,7 +280,6 @@ def main_loop():
                     print(f"✅ Actualizado {ACTIVE_JSON} → {best['best']['params']}  [{status}]")
                 else:
                     print("👍 Sin cambios en strategy/params; no se reescribe.")
-
 
         except Exception as e:
             print(f"⚠️ Reoptimizer warning: {e}")
