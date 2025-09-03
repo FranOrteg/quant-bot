@@ -95,7 +95,8 @@ PARAM_COOLDOWN_BARS = 12  # evita cambios de params demasiado frecuentes
 def _maybe_reload_active_params():
     """
     Si existe ACTIVE_PATH y cambió su mtime, recarga en caliente la estrategia/params
-    respetando un cooldown de PARAM_COOLDOWN_BARS velas. Soporta 'lookback_bars'.
+    respetando un cooldown de PARAM_COOLDOWN_BARS velas. Acepta parámetros extra
+    numéricos del JSON (p.ej., lookback_bars) y los preserva.
     """
     global strategy_name, strategy_func, params, _last_active_mtime, _last_active_sig, LAST_PARAM_APPLY_TS
 
@@ -116,34 +117,40 @@ def _maybe_reload_active_params():
             blob = json.load(f)
 
         best = blob.get("best", {})
-        new_params   = (best.get("params") or {})
-        new_strategy = (best.get("strategy") or "rsi_sma")
+        new_params   = best.get("params", {}) or {}
+        new_strategy = best.get("strategy", "rsi_sma") or "rsi_sma"
 
-        # solo soportamos rsi_sma en live actual
+        # por ahora solo rsi_sma en live
         if new_strategy != "rsi_sma":
             new_strategy = "rsi_sma"
 
-        # normaliza y añade lookback_bars si viene en el JSON (default 8)
-        lb = int(new_params.get("lookback_bars", 8))
-        # saneo simple de lb
-        if lb < 3:  lb = 3
-        if lb > 50: lb = 50
-
+        # base obligatoria
         applied_params = dict(
             rsi_period=int(new_params.get("rsi_period", 14)),
             sma_period=int(new_params.get("sma_period", 50)),
             rsi_buy=int(new_params.get("rsi_buy", 25)),
             rsi_sell=int(new_params.get("rsi_sell", 75)),
-            lookback_bars=lb,
         )
+        # merge de extras numéricos (p.ej. lookback_bars)
+        for k, v in new_params.items():
+            if k in applied_params:
+                continue
+            # solo pasamos valores escalares numéricos (int/float) y seguros de castear
+            try:
+                if isinstance(v, bool):
+                    continue
+                if isinstance(v, (int, float)) or (isinstance(v, str) and v.replace('.', '', 1).lstrip('-').isdigit()):
+                    iv = int(v) if str(v).isdigit() else float(v)
+                    applied_params[k] = iv
+            except Exception:
+                pass  # ignoramos lo que no sea numérico
 
         new_sig = _params_signature(new_strategy, applied_params)
         if _last_active_sig is not None and new_sig == _last_active_sig:
-            # mismos params; no hacer ruido
             _last_active_mtime = mtime
-            return
+            return  # mismo payload efectivo; silencio
 
-        # aplica cambios
+        # Aplica
         strategy_name = new_strategy
         strategy_func = rsi_sma_strategy
         params        = applied_params

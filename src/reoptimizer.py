@@ -1,10 +1,12 @@
+# src/reoptimizer.py
 # -*- coding: utf-8 -*-
 """
-Reoptimizer con quality-gate:
+Reoptimizer con quality-gate y fallback opcional:
 - Cada ciclo:
   1) Comprueba si el CSV results/rsi_optimization_{TF}.csv está viejo o no existe.
   2) Si está viejo (o forzado), lanza la optimización (subproceso).
   3) Lee el CSV y escoge el mejor set por total_return que PASE EL GATE.
+     *Opcional*: si nadie pasa el gate y REOPT_ALLOW_ABS_FALLBACK=True, usa el Top ABS.
   4) Escribe results/active_params_{SYMBOL}_{TF}.json solo si cambian strategy/params.
   5) Añade histórico en results/active_params_history_{SYMBOL}_{TF}.csv
 """
@@ -35,6 +37,9 @@ PYTHON_BIN        = os.getenv("PYTHON_BIN", ".venv/bin/python")
 MIN_RETURN_PCT    = float(os.getenv("REOPT_MIN_RETURN_PCT", "0.0"))  # ej 0.5
 MIN_SHARPE        = float(os.getenv("REOPT_MIN_SHARPE", "0.0"))      # ej 0.2
 MAX_DRAWDOWN_PCT  = float(os.getenv("REOPT_MAX_DD_PCT", "20.0"))     # ej 15 → DD >= -15%
+
+# Fallback: si nadie pasa el gate, ¿usar el mejor absoluto?
+ALLOW_ABS_FALLBACK = os.getenv("REOPT_ALLOW_ABS_FALLBACK", "False").strip().lower() in ("1", "true", "yes", "on")
 
 OPT_CSV      = f"results/rsi_optimization_{TIMEFRAME}.csv"
 ACTIVE_JSON  = f"results/active_params_{SYMBOL}_{TIMEFRAME}.json"
@@ -74,68 +79,69 @@ def _run_optimizer():
     except subprocess.CalledProcessError as e:
         print(f"⚠️ Optimización falló: {e}")
 
-# ==== NUEVA ENV ARRIBA, junto al resto de config ====
-ALLOW_ABS_FALLBACK = os.getenv("REOPT_ALLOW_ABS_FALLBACK", "False").strip().lower() in ("1","true","yes","on")
-# =====================================================
 
 def _pick_best_from_csv(path: str):
+    """
+    Lee el CSV y devuelve (payload, status).
+    status ∈ {'ok_gate', 'fallback_abs', 'no_csv', 'empty_csv', 'missing_cols',
+              'no_rows', 'no_pass_gate'}
+    """
     if not os.path.exists(path):
-        return None
+        return None, "no_csv"
 
     df = pd.read_csv(path)
     if df.empty:
-        return None
+        return None, "empty_csv"
 
-    # Tipos numéricos
-    for c in ("total_return", "sharpe_ratio", "max_drawdown", "lookback_bars", "rsi_period", "sma_period", "rsi_buy", "rsi_sell"):
+    # Tipos numéricos (convertimos si existen estas columnas)
+    for c in ("total_return", "sharpe_ratio", "max_drawdown",
+              "lookback_bars", "rsi_period", "sma_period", "rsi_buy", "rsi_sell"):
         if c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
     required = {"rsi_period", "sma_period", "rsi_buy", "rsi_sell", "total_return"}
     if not required.issubset(df.columns):
-        print(f"⚠️ CSV sin columnas requeridas: faltan {required - set(df.columns)}")
-        return None
+        return None, f"missing_cols:{required - set(df.columns)}"
 
     df = df.dropna(subset=["total_return"]).copy()
     if df.empty:
-        return None
+        return None, "no_rows"
 
-    # --- QUALITY GATE (max_drawdown viene en % y suele ser negativo) ---
+    # --- QUALITY GATE (max_drawdown suele venir negativo) ---
     passed = df[
         (df["total_return"] >= MIN_RETURN_PCT) &
         (df["sharpe_ratio"] >= MIN_SHARPE) &
         (df["max_drawdown"] >= -abs(MAX_DRAWDOWN_PCT))
     ]
 
+    use_fallback = False
     if passed.empty:
-        msg = (
+        print(
             "⛔ Ningún setup pasó el gate → "
             f"min_return={MIN_RETURN_PCT}%, min_sharpe={MIN_SHARPE}, maxDD=-{abs(MAX_DRAWDOWN_PCT)}%"
         )
-        print(msg)
-
         if not ALLOW_ABS_FALLBACK:
-            return None
-        # Fallback: mejor absoluto por total_return (aunque sea negativo)
+            return None, "no_pass_gate"
         print("↩️ REOPT_ALLOW_ABS_FALLBACK=on → usando Top ABS por total_return.")
         candidate = df.sort_values("total_return", ascending=False).iloc[0]
+        use_fallback = True
     else:
         candidate = passed.sort_values("total_return", ascending=False).iloc[0]
 
+    # construir params (obligatorios + lookback_bars si existe)
     params = dict(
-        rsi_period = int(candidate["rsi_period"]),
-        sma_period = int(candidate["sma_period"]),
-        rsi_buy    = int(candidate["rsi_buy"]),
-        rsi_sell   = int(candidate["rsi_sell"]),
+        rsi_period=int(candidate["rsi_period"]),
+        sma_period=int(candidate["sma_period"]),
+        rsi_buy=int(candidate["rsi_buy"]),
+        rsi_sell=int(candidate["rsi_sell"]),
     )
-    # Si el CSV trae lookback_bars, lo incorporamos
-    if "lookback_bars" in candidate and not pd.isna(candidate["lookback_bars"]):
+    if "lookback_bars" in candidate.index and not pd.isna(candidate["lookback_bars"]):
         params["lookback_bars"] = int(candidate["lookback_bars"])
 
     metrics = dict(
-        total_return = float(candidate.get("total_return", 0.0)),
-        sharpe_ratio = float(candidate.get("sharpe_ratio", 0.0)) if "sharpe_ratio" in df.columns else 0.0,
-        max_drawdown = float(candidate.get("max_drawdown", 0.0)) if "max_drawdown" in df.columns else 0.0,
+        total_return=float(candidate.get("total_return", 0.0)),
+        sharpe_ratio=float(candidate.get("sharpe_ratio", 0.0)) if "sharpe_ratio" in df.columns else 0.0,
+        max_drawdown=float(candidate.get("max_drawdown", 0.0)) if "max_drawdown" in df.columns else 0.0,
     )
 
     payload = {
@@ -157,9 +163,10 @@ def _pick_best_from_csv(path: str):
             "min_sharpe": MIN_SHARPE,
             "max_drawdown_pct": MAX_DRAWDOWN_PCT,
             "allow_abs_fallback": ALLOW_ABS_FALLBACK,
+            "selection_mode": "fallback_abs" if use_fallback else "gate",
         },
     }
-    return payload
+    return payload, ("fallback_abs" if use_fallback else "ok_gate")
 
 
 def _append_history(payload: dict):
@@ -191,7 +198,8 @@ def main_loop():
     print(
         f"🔁 Reoptimizer activo para {SYMBOL} {TIMEFRAME}. "
         f"CSV: {OPT_CSV} | cada {SLEEP_SECONDS}s | Gate: "
-        f"min_ret={MIN_RETURN_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DRAWDOWN_PCT)}%"
+        f"min_ret={MIN_RETURN_PCT}% min_sharpe={MIN_SHARPE} maxDD=-{abs(MAX_DRAWDOWN_PCT)}% "
+        f"| fallback_abs={'on' if ALLOW_ABS_FALLBACK else 'off'}"
     )
 
     # Inicializa la firma previa desde .hash o desde el JSON existente
@@ -223,8 +231,8 @@ def main_loop():
                 _run_optimizer()
 
             best, status = _pick_best_from_csv(OPT_CSV)
-            if not best:
-                print(f"👉 Sin candidato que pase el gate ({status}); se mantiene el activo.")
+            if best is None:
+                print(f"👉 Sin candidato (status={status}); se mantiene el activo.")
             else:
                 new_sig = _params_signature(best)
                 if new_sig != last_sig:
@@ -236,7 +244,8 @@ def main_loop():
                         f.write(new_sig)
                     last_sig = new_sig
                     _append_history(best)
-                    print(f"✅ Actualizado {ACTIVE_JSON} → {best['best']['params']}")
+                    mode = best.get("quality_gate", {}).get("selection_mode", "gate")
+                    print(f"✅ Actualizado {ACTIVE_JSON} (mode={mode}) → {best['best']['params']}")
                 else:
                     print("👍 Sin cambios en strategy/params; no se reescribe.")
 
@@ -244,6 +253,7 @@ def main_loop():
             print(f"⚠️ Reoptimizer warning: {e}")
 
         time.sleep(SLEEP_SECONDS)
+
 
 if __name__ == "__main__":
     main_loop()
